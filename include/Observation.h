@@ -2,13 +2,13 @@
 #define OBJECTSLAM_OBSERVATION_H
 
 #include "Quadric.h"
-#include "Frame.h"
+#include "KeyFrame.h"
 
 struct Observation{
     int mLabel;
     Eigen::Vector4d mBbox;
     double mProb;
-    std::weak_ptr<Frame> mpFrame;
+    std::weak_ptr<KeyFrame> mpKeyFrame;
     std::weak_ptr<g2o::Quadric> mpQuadric;
 };
 typedef std::vector<std::shared_ptr<Observation>> Observations;

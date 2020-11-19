@@ -46,11 +46,14 @@ add_library(${PROJECT_NAME} SHARED
         src/FrameDrawer.cpp
         src/Map.cpp
         src/Frame.cpp
-        src/Track.cpp
+        src/Tracking.cpp
         src/BasicQuadricEdges.cpp
         src/InitializeQuadric.cpp
         src/System.cpp
-        src/Dataset.cpp)
+        src/Dataset.cpp
+        src/Detector.cpp
+        src/ORBextractor.cpp
+        src/MapPoint.cpp src/KeyFrame.cpp)
 
 set(THIRD_PARTY_LIBS
         ${OpenCV_LIBS}

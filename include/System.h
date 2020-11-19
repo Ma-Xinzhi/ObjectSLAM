@@ -1,7 +1,7 @@
 #ifndef OBJECTSLAM_SYSTEM_H
 #define OBJECTSLAM_SYSTEM_H
 
-#include "Track.h"
+#include "Tracking.h"
 #include "Frame.h"
 #include "FrameDrawer.h"
 #include "Map.h"
@@ -30,7 +30,7 @@ private:
     std::shared_ptr<FrameDrawer> mpFrameDrawer;
     std::shared_ptr<MapDrawer> mpMapDrawer;
 
-    std::shared_ptr<Track> mpTrack;
+    std::shared_ptr<Tracking> mpTracking;
     std::shared_ptr<Map> mpMap;
 
 };

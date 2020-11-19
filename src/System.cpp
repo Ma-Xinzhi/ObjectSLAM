@@ -9,7 +9,7 @@ System::System(const std::string &strSettingsFile) {
 
     mpMapDrawer = std::make_shared<MapDrawer>(strSettingsFile, mpMap);
 
-    mpTrack = std::make_shared<Track>(strSettingsFile, mpMap, mpMapDrawer, mpFrameDrawer);
+    mpTracking = std::make_shared<Tracking>(strSettingsFile, mpMap, mpMapDrawer, mpFrameDrawer);
 
     mpViewer = std::make_shared<Viewer>(strSettingsFile, mpMapDrawer, mpFrameDrawer);
 
@@ -24,7 +24,7 @@ void System::TrackWithSingleObject(const Eigen::VectorXd &pose, const Eigen::Vec
     ob_ptr->mBbox = detection.head(4);
     ob_ptr->mLabel = detection[4];
     ob_ptr->mProb = detection[5];
-    mpTrack->GrabPoseAndSingleObject(pose_se3, ob_ptr, im);
+    mpTracking->GrabPoseAndSingleObject(pose_se3, ob_ptr, im);
 }
 
 void System::TrackWithObjects(const Eigen::VectorXd &pose, const std::vector<Eigen::VectorXd> &detections,
@@ -43,7 +43,7 @@ void System::TrackWithObjects(const Eigen::VectorXd &pose, const std::vector<Eig
         obs.push_back(ob_ptr);
     }
     // TODO 检测框很多的情况
-    mpTrack->GrabPoseAndObjects(pose_se3, obs, im);
+    mpTracking->GrabPoseAndObjects(pose_se3, obs, im);
 }
 
 void System::ShutDown() {

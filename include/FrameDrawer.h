@@ -7,12 +7,12 @@
 #include "Map.h"
 #include "Frame.h"
 
-class Track;
+class Tracking;
 class FrameDrawer{
 public:
     FrameDrawer(const std::shared_ptr<Map>& pmap);
 
-    void Update(Track* ptrack);
+    void Update(Tracking* ptrack);
 
     cv::Mat DrawFrame();
     // 显示检测框，投影椭圆和框
