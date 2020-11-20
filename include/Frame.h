@@ -17,7 +17,7 @@ class MapPoint;
 class Frame {
 public:
 
-    Frame(const cv::Mat& imGray, const cv::Mat& depth, std::shared_ptr<ORBextractor> extractor,
+    Frame(const cv::Mat& imGray, const cv::Mat& depth, double timeStamp, std::shared_ptr<ORBextractor> extractor,
           const cv::Mat& K, const cv::Mat& distCoef, float bf, float thDepth);
     Frame(const g2o::SE3Quat& pose, std::shared_ptr<Observation> bbox, const cv::Mat& image);
     Frame(const g2o::SE3Quat& pose, const std::vector<std::shared_ptr<Observation>>& bbox, const cv::Mat& image);
@@ -25,6 +25,8 @@ public:
     void ExtractORB(const cv::Mat &img);
 
     void SetKeyFrame();
+
+    std::vector<size_t> GetFeaturesInArea(float x, float y, float r, const int minLevel=-1, const int maxLevel=-1) const;
 
     void SetDetectionResults(const std::vector<std::shared_ptr<Observation>>& detection_results) { mvpObservation = detection_results; }
     std::vector<std::shared_ptr<Observation>> GetDetectionResults() const{ return mvpObservation; }
@@ -43,6 +45,8 @@ public:
     long unsigned int mnId;  // image topic sequence id, fixed
 
     cv::Mat mFrameImg;
+
+    double mTimeStamp;
 
     float mbf;
     float mb;

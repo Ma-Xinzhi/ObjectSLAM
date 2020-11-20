@@ -53,7 +53,7 @@ add_library(${PROJECT_NAME} SHARED
         src/Dataset.cpp
         src/Detector.cpp
         src/ORBextractor.cpp
-        src/MapPoint.cpp src/KeyFrame.cpp)
+        src/MapPoint.cpp src/KeyFrame.cpp src/ORBmatcher.cpp)
 
 set(THIRD_PARTY_LIBS
         ${OpenCV_LIBS}

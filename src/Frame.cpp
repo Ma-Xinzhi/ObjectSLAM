@@ -10,10 +10,9 @@ float Frame::cx, Frame::cy, Frame::fx, Frame::fy, Frame::invfx, Frame::invfy;
 float Frame::mnMinX, Frame::mnMinY, Frame::mnMaxX, Frame::mnMaxY;
 float Frame::mfGridElementWidthInv, Frame::mfGridElementHeightInv;
 
-Frame::Frame(const cv::Mat &imGray, const cv::Mat &depth, std::shared_ptr<ORBextractor> extractor, const cv::Mat &K,
-             const cv::Mat &distCoef, float bf, float thDepth): mpORBextractor(extractor), mK(K.clone()),
-             mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth)
-             {
+Frame::Frame(const cv::Mat &imGray, const cv::Mat &depth, double timeStamp, std::shared_ptr<ORBextractor> extractor,
+             const cv::Mat &K, const cv::Mat &distCoef, float bf, float thDepth): mpORBextractor(extractor),
+             mTimeStamp(timeStamp), mK(K.clone()), mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth){
     mnId = nNextId++;
 
     // Scale Level Info
@@ -81,6 +80,54 @@ void Frame::SetPose(const Eigen::Matrix4d &pose_wc) {
     mTwc = pose_wc;
     mtwc = mTwc.col(3).head(3);
     mRwc = mTwc.block(0,0,3,3);
+}
+
+// r是搜索的范围
+std::vector<size_t> Frame::GetFeaturesInArea(float x, float y, float r, const int minLevel, const int maxLevel) const {
+    std::vector<size_t> vIndices;
+    vIndices.reserve(N);
+
+    int nMinCellX = std::max(0, (int)floor((x-r-mnMinX)*mfGridElementWidthInv));
+    if(nMinCellX >= FRAME_GRID_COLS)
+        return vIndices;
+
+    int nMaxCellX = std::min(FRAME_GRID_COLS-1, (int)ceil((x+r-mnMinX)*mfGridElementWidthInv));
+    if(nMaxCellX < 0)
+        return vIndices;
+
+    int nMinCellY = std::max(0, (int)floor((y-r-mnMinY)*mfGridElementHeightInv));
+    if(nMinCellY >= FRAME_GRID_ROWS)
+        return vIndices;
+
+    int nMaxCellY = std::min(0, (int)ceil((y+r-mnMinY)*mfGridElementHeightInv));
+    if(nMaxCellY < 0)
+        return vIndices;
+
+    bool bCheckLevels = (minLevel>0) || (maxLevel>=0);
+
+    for(int ix=nMinCellX; ix<=nMaxCellX; ix++){
+        for(int iy=nMinCellY; iy<=nMaxCellY; iy++){
+            std::vector<size_t> vCell = mGrid[ix][iy];
+            if(vCell.empty())
+                continue;
+            for(auto& index : vCell){
+                cv::KeyPoint kpUn = mvKeysUn[index];
+                if(bCheckLevels){
+                    if(kpUn.octave < minLevel)
+                        continue;
+                    if(maxLevel >= 0)
+                        if(kpUn.octave > maxLevel)
+                            continue;
+                }
+                float distx = kpUn.pt.x-x;
+                float disty = kpUn.pt.y-y;
+                if(fabs(distx)<r && fabs(disty)<r)
+                    vIndices.push_back(index);
+            }
+        }
+    }
+
+    return vIndices;
 }
 
 void Frame::UndistortKeyPoints() {
@@ -152,14 +199,14 @@ void Frame::ComputeImageBounds(const cv::Mat &img) {
 
 void Frame::AssignFeaturesToGrid() {
     int nReserve = N / (FRAME_GRID_COLS*FRAME_GRID_ROWS);
-    for(int i = 0; i < FRAME_GRID_ROWS; i++)
-        for (int j = 0; j < FRAME_GRID_COLS; ++j)
+    for(int i = 0; i < FRAME_GRID_COLS; i++)
+        for (int j = 0; j < FRAME_GRID_ROWS; ++j)
             mGrid[i][j].reserve(nReserve);
     for (int i = 0; i < N; ++i) {
         cv::KeyPoint kp = mvKeys[i];
         int nGridPosX, nGridPosY;
         if(PosInGrid(kp, nGridPosX, nGridPosY))
-            mGrid[nGridPosY][nGridPosX].push_back(i);
+            mGrid[nGridPosX][nGridPosY].push_back(i);
     }
 }
 
