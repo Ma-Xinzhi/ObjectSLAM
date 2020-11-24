@@ -48,6 +48,11 @@ Eigen::Vector3d KeyFrame::GetCameraCenter() {
     return mtwc;
 }
 
+Eigen::Vector3d KeyFrame::GetTranslation() {
+    std::unique_lock<std::mutex> lk(mMutexPose);
+    return mtwc;
+}
+
 void KeyFrame::AddConnection(std::shared_ptr<KeyFrame> pKF, const int &weight)
 {
     {
@@ -403,7 +408,7 @@ void KeyFrame::EraseConnection(std::shared_ptr<KeyFrame> pKF) {
         UpdateConnections();
 }
 
-std::vector<size_t> KeyFrame::GetFeaturesInArea(float x, float y, float r) const {
+std::vector<size_t> KeyFrame::GetFeaturesInArea(float x, float y, float r, const int minLevel, const int maxLevel) const {
     std::vector<size_t> vIndices;
     vIndices.resize(N);
 
@@ -423,14 +428,23 @@ std::vector<size_t> KeyFrame::GetFeaturesInArea(float x, float y, float r) const
     if(nMaxCellY < 0)
         return vIndices;
 
+    bool bCheckLevels = (minLevel>0) || (maxLevel>=0);
+
     for(int i=nMinCellX; i<=nMaxCellX; ++i){
         for(int j=nMinCellY; j<=nMaxCellY; ++j){
             std::vector<size_t> vCell = mGrid[i][j];
             for(auto& index : vCell){
                 cv::KeyPoint kp = mvKeysUn[index];
+                if(bCheckLevels){
+                    if(kp.octave < minLevel)
+                        continue;
+                    if(maxLevel>=0)
+                        if(kp.octave > maxLevel)
+                            continue;
+                }
+
                 float distx = kp.pt.x - x;
                 float disty = kp.pt.y - y;
-
                 if(fabs(distx)<r && fabs(disty)<r)
                     vIndices.push_back(index);
             }

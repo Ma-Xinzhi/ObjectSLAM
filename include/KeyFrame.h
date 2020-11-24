@@ -20,8 +20,9 @@ public:
     void SetPose(const Eigen::Matrix4d &Twc);
     Eigen::Matrix4d GetPose();
     Eigen::Matrix4d GetPoseInverse();
-    Eigen::Vector3d GetCameraCenter();
     Eigen::Matrix3d GetRotation();
+    Eigen::Vector3d GetCameraCenter();
+    Eigen::Vector3d GetTranslation();
 
     // Covisibility graph functions
     void AddConnection(std::shared_ptr<KeyFrame> pKF, const int &weight);
@@ -53,7 +54,7 @@ public:
     std::shared_ptr<MapPoint> GetMapPoint(size_t idx);
 
     // KeyPoint functions
-    std::vector<size_t> GetFeaturesInArea(float x, float y, float r) const;
+    std::vector<size_t> GetFeaturesInArea(float x, float y, float r, const int minLevel=-1, const int maxLevel=-1) const;
     Eigen::Vector3d UnprojectStereo(int i);
 
     // Image

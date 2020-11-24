@@ -37,6 +37,7 @@ public:
     Eigen::Matrix4d GetPose() const { return mTwc; }
     Eigen::Vector3d GetCameraCenter() const { return mtwc; }
     Eigen::Matrix3d GetRotation() const { return mRwc; }
+    Eigen::Matrix3d GetTranslation() const { return mRwc; }
 
     cv::Mat GetImg() const { return mFrameImg; }
 

@@ -1,9 +1,9 @@
-#ifndef ORBEXTRACTOR_H
-#define ORBEXTRACTOR_H
+#ifndef OBJECTSLAM_ORBEXTRACTOR_H
+#define OBJECTSLAM_ORBEXTRACTOR_H
 
 #include <vector>
 #include <list>
-#include <opencv/cv.h>
+#include <opencv2/core.hpp>
 
 class ExtractorNode
 {

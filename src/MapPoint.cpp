@@ -1,5 +1,6 @@
 #include "MapPoint.h"
 #include "Map.h"
+#include "ORBmatcher.h"
 
 long unsigned int MapPoint::nNextId = 0;
 std::mutex MapPoint::mGlobalMutex;
