@@ -14,7 +14,7 @@ class Map;
 
 class KeyFrame{
 public:
-    KeyFrame(Frame& F, std::shared_ptr<Map> pMap);
+    KeyFrame(std::shared_ptr<Frame> F, std::shared_ptr<Map> pMap);
 
     // Pose functions
     void SetPose(const Eigen::Matrix4d &Twc);

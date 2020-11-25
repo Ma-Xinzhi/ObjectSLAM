@@ -52,10 +52,10 @@ void FrameDrawer::DrawProjectionOnImage(cv::Mat& img) {
     }
 }
 
-void FrameDrawer::Update(Track *ptrack) {
+void FrameDrawer::Update(std::shared_ptr<Tracking> ptrack) {
     std::unique_lock<std::mutex> lk(mMutex);
-    ptrack->GetCurrentImage().copyTo(mImg);
-    mpCurrentFrame = ptrack->GetCurrentFrame();
-    mvpObservation = ptrack->GetCurrentFrame()->GetDetectionResults();
+    ptrack->mCurImg.copyTo(mImg);
+    mpCurrentFrame = ptrack->mpCurrentFrame;
+    mvpObservation = ptrack->mpCurrentFrame->GetDetectionResults();
     mCalib = ptrack->GetCalib();
 }

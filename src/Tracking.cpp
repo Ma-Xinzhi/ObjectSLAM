@@ -1,12 +1,14 @@
 #include "Tracking.h"
+#include "ORBmatcher.h"
 #include "utils/dataprocess_utils.h"
 
 #include <set>
 #include <opencv2/core/eigen.hpp>
 
-Tracking::Tracking(const std::string &strSettingPath, std::shared_ptr<Map> pmap, std::shared_ptr<MapDrawer> pmapdrawer,
-             std::shared_ptr<FrameDrawer> pframedrawer): mpMap(pmap), mpMapDrawer(pmapdrawer),
-             mpFrameDrawer(pframedrawer){
+Tracking::Tracking(const std::string &strSettingPath, std::shared_ptr<Map> pMap, std::shared_ptr<MapDrawer> pMapDrawer,
+             std::shared_ptr<FrameDrawer> pFrameDrawer): mState(NO_IMAGES_YET), mpMap(pMap), mpMapDrawer(pMapDrawer),
+             mpFrameDrawer(pFrameDrawer), mnLastRelocFrameId(0), mpCurrentFrame(nullptr), mpLastFrame(nullptr),
+             mpLastKeyFrame(nullptr), mpReferenceKF(nullptr){
     cv::FileStorage fSettings(strSettingPath, cv::FileStorage::READ);
     double fx = fSettings["Camera.fx"];
     double fy = fSettings["Camera.fy"];
@@ -51,11 +53,20 @@ Tracking::Tracking(const std::string &strSettingPath, std::shared_ptr<Map> pmap,
     int fIniThFAST = fSettings["ORBextractor.iniThFAST"];
     int fMinThFAST = fSettings["ORBextractor.minThFAST"];
 
+    LOG(INFO) << std::endl  << "ORB Extractor Parameters: " << std::endl
+              << "- Number of Features: " << nFeatures << std::endl
+              << "- Scale Levels: " << nLevels << std::endl
+              << "- Scale Factor: " << fScaleFactor << std::endl
+              << "- Initial Fast Threshold: " << fIniThFAST << std::endl
+              << "- Minimum Fast Threshold: " << fMinThFAST << std::endl;
+
     mpInitailizeQuadric = std::make_shared<InitializeQuadric>(mImgHeight, mImgWidth);
-    mpCurrentFrame = nullptr;
     mpORBextractor = std::make_shared<ORBextractor>(nFeatures, fScaleFactor, nLevels, fIniThFAST, fMinThFAST);
 
     mThDepth = mbf*(float)fSettings["ThDepth"]/fx;
+
+    mVelocity = Eigen::Matrix4d::Identity();
+    mbVelocity = false;
 
     mDepthMapFactor = fSettings["DepthMapFactor"];
     if(fabs(mDepthMapFactor) < 1e-5)
@@ -75,7 +86,7 @@ void Tracking::GrabPoseAndSingleObject(const g2o::SE3Quat &pose, std::shared_ptr
     // 这里主要的问题是该创建的Frame对象的shared_ptr并未存储在map类中，造成删除
     mpCurrentFrame = std::make_shared<Frame>(pose, bbox, img_RGB);
 
-    mpFrameDrawer->Update(this);
+    mpFrameDrawer->Update(std::shared_ptr<Tracking>(this));
     // TODO 这里先简单将位姿结果作为已知，直接进行赋值，后续需要跟踪图像求解位姿
     mpMapDrawer->SetCurrentCameraPose(pose);
 
@@ -112,11 +123,41 @@ void Tracking::GrabRGBDImageAndSingleObject(const cv::Mat &img_RGB, const cv::Ma
     if(fabs(mDepthMapFactor-1.0f)>1e-5 || imDepth.type()!=CV_32F)
         imDepth.convertTo(imDepth, CV_32F, mDepthMapFactor);
 
-    mpCurrentFrame = std::make_shared<Frame>()
+    mpCurrentFrame = std::make_shared<Frame>(mGrayImg, imDepth, mpORBextractor, mK, mDistCoef, mbf, mThDepth);
 
+    Track();
 }
 
 void Tracking::Track() {
+    if(mState == NO_IMAGES_YET)
+        mState = NOT_INITIALIZED;
+
+    mLastProcessedState = mState;
+
+    // Map 不能改变
+    std::unique_lock<std::mutex> lk(mpMap->mMutexMapUpdate);
+
+    if(mState == NOT_INITIALIZED){
+        StereoInitialization();
+        mpFrameDrawer->Update(std::shared_ptr<Tracking>(this));
+        if(mState != OK)
+            return;
+    }
+    else{
+        bool bOK;
+        if(mState == OK){
+            // TODO 这里是Local Mapping可能会改变一些地图点，需要斟酌一下
+            CheckReplacedInLastFrame();
+
+            if(!mbVelocity || mpCurrentFrame->mnId < mnLastRelocFrameId+2)
+                bOK = TrackReferenceKeyFrame();
+            else{
+                bOK = TrackWithMotionModel();
+                if(!bOK)
+                    bOK = TrackReferenceKeyFrame();
+            }
+        }
+    }
 
 }
 
@@ -131,7 +172,7 @@ void Tracking::UpdateObjectObservation() {
         if(!calibrateMeasurement(measurement, mImgHeight, mImgWidth, config_border, config_size)){
             obs.erase(iter);
         }else{
-            (*iter)->mpFrame = mpCurrentFrame;
+            (*iter)->mpKeyFrame = mpCurrentFrame;
             mpMap->AddObservation(*iter);
             iter++;
         }
@@ -175,7 +216,70 @@ void Tracking::CheckInitialization() {
     }
 }
 
-void Tracking::ProcessVisualization() {
+void Tracking::StereoInitialization() {
+    if(mpCurrentFrame->N > 500){
+        mpCurrentFrame->SetPose(Eigen::Matrix4d::Identity());
+
+        std::shared_ptr<KeyFrame> pKFinit = std::make_shared<KeyFrame>(mpCurrentFrame, mpMap);
+
+        mpMap->AddKeyFrame(pKFinit);
+
+        for (int i = 0; i < mpCurrentFrame->N; ++i) {
+            float z = mpCurrentFrame->mvDepth[i];
+            if(z>0){
+                Eigen::Vector3d x3D = mpCurrentFrame->UnprojectStereo(i);
+                std::shared_ptr<MapPoint> pNewMP = std::make_shared<MapPoint>(x3D, pKFinit, mpMap);
+                pNewMP->AddObservation(pKFinit, i);
+                pKFinit->AddMapPoint(pNewMP, i);
+                pNewMP->ComputeDistinctiveDescriptors();
+                pNewMP->UpdateNormalAndDepth();
+                mpMap->AddMapPoint(pNewMP);
+
+                mpCurrentFrame->mvpMapPoints[i] = pNewMP;
+            }
+        }
+
+        LOG(INFO) << "New map created with " << mpMap->MapPointsInMap() << " points" << std::endl;
+
+        mpLastFrame = mpCurrentFrame;
+        mpLastKeyFrame = pKFinit;
+        mnLastKeyFrameId = pKFinit->mnId;
+
+        mvpLocalKeyFrames.push_back(pKFinit);
+        mvpLocalMapPoints = mpMap->GetAllMapPoints();
+        mpReferenceKF = pKFinit;
+        mpCurrentFrame->mpReferenceKF = pKFinit;
+
+        mpMap->SetReferenceMapPoints(mvpLocalMapPoints);
+        mpMap->mvpKeyFrameOrigins.push_back(pKFinit);
+
+        mpMapDrawer->SetCurrentCameraPose(mpCurrentFrame->GetPose());
+
+        mState = OK;
+    }
+}
+
+void Tracking::CheckReplacedInLastFrame() {
+    for (int i = 0; i < mpLastFrame->N; ++i) {
+        std::shared_ptr<MapPoint> pMP = mpLastFrame->mvpMapPoints[i];
+        if(pMP){
+            std::shared_ptr<MapPoint> pRep = pMP->GetReplaced();
+            if(pRep)
+                mpLastFrame->mvpMapPoints[i] = pRep;
+        }
+    }
+}
+
+bool Tracking::TrackReferenceKeyFrame() {
+    ORBmatcher matcher(0.7, true);
+
+    int nmatches = matcher.SearchByProjection(mpCurrentFrame, mpReferenceKF);
+
+    if(nmatches < 15)
+        return false;
+
+    mpCurrentFrame->SetPose(mpLastFrame->GetPose());
+
 
 }
 

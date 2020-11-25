@@ -13,20 +13,22 @@
 
 struct Observation;
 class MapPoint;
+class KeyFrame;
 
 class Frame {
 public:
-
+    Frame()=default;
     Frame(const cv::Mat& imGray, const cv::Mat& depth, double timeStamp, std::shared_ptr<ORBextractor> extractor,
           const cv::Mat& K, const cv::Mat& distCoef, float bf, float thDepth);
     Frame(const g2o::SE3Quat& pose, std::shared_ptr<Observation> bbox, const cv::Mat& image);
     Frame(const g2o::SE3Quat& pose, const std::vector<std::shared_ptr<Observation>>& bbox, const cv::Mat& image);
 
     void ExtractORB(const cv::Mat &img);
-
-    void SetKeyFrame();
-
     std::vector<size_t> GetFeaturesInArea(float x, float y, float r, const int minLevel=-1, const int maxLevel=-1) const;
+
+    bool isInFrustum(std::shared_ptr<MapPoint> pMP, float viewingCosLimit);
+
+    Eigen::Vector3d UnprojectStereo(int i);
 
     void SetDetectionResults(const std::vector<std::shared_ptr<Observation>>& detection_results) { mvpObservation = detection_results; }
     std::vector<std::shared_ptr<Observation>> GetDetectionResults() const{ return mvpObservation; }
@@ -44,6 +46,9 @@ public:
 public:
     static long unsigned int nNextId;
     long unsigned int mnId;  // image topic sequence id, fixed
+
+    // Reference Keyframe.
+    std::shared_ptr<KeyFrame> mpReferenceKF;
 
     cv::Mat mFrameImg;
 
@@ -74,6 +79,10 @@ public:
 
     cv::Mat mK;
     cv::Mat mDistCoef;
+
+    // 计算一次
+    static bool mbInitialComputations;
+
     static float fx;
     static float fy;
     static float cx;
@@ -86,8 +95,7 @@ public:
     static float mnMaxX;
     static float mnMinY;
     static float mnMaxY;
-    // 计算一次
-    static bool mbInitialComputations;
+
 
     // Scale pyramid info.
     int mnScaleLevels;

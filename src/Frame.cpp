@@ -1,6 +1,7 @@
 #include "Frame.h"
 #include "Observation.h"
 #include "MapPoint.h"
+#include "KeyFrame.h"
 
 #include <opencv2/imgproc.hpp>
 
@@ -55,6 +56,8 @@ Frame::Frame(const cv::Mat &imGray, const cv::Mat &depth, double timeStamp, std:
     }
 
     mb = mbf / fx;
+
+    mpReferenceKF = nullptr;
 
     //TODO 这里如果是Keyframe的话，将目标检测的信息考虑进来
     AssignFeaturesToGrid();
@@ -128,6 +131,72 @@ std::vector<size_t> Frame::GetFeaturesInArea(float x, float y, float r, const in
     }
 
     return vIndices;
+}
+
+bool Frame::isInFrustum(std::shared_ptr<MapPoint> pMP, float viewingCosLimit) {
+    pMP->mbTrackInView = false;
+
+    Eigen::Vector3d P = pMP->GetWorldPos();
+
+    Eigen::Vector3d Pc = mRwc.transpose()*P-mRwc.transpose()*mtwc;
+
+    float PcX = Pc[0];
+    float PcY = Pc[1];
+    float PcZ = Pc[2];
+
+    if(PcZ < 0)
+        return false;
+
+    float invZ = 1/PcZ;
+
+    float u = fx*PcX*invZ + cx;
+    float v = fy*PcY*invZ + cy;
+
+    if(u<mnMinX || u>mnMaxX)
+        return false;
+    if(v<mnMinY || v>mnMaxY)
+        return false;
+
+    float maxDistance = pMP->GetMaxDistanceInvariance();
+    float minDistance = pMP->GetMinDistanceInvariance();
+
+    float dist = Pc.norm();
+
+    if(dist<minDistance || dist>maxDistance)
+        return false;
+
+    Eigen::Vector3d Pn = pMP->GetNormal();
+
+    float viewCos = Pc.dot(Pn)/dist;
+
+    if(viewCos < viewingCosLimit)
+        return false;
+
+    int nPredictedLevel = pMP->PredictScale(dist, std::shared_ptr<Frame>(this));
+
+    // 在Tracking中使用的数据
+    pMP->mbTrackInView = true;
+    pMP->mTrackProjX = u;
+    pMP->mTrackProjXR = u-mbf*invZ;
+    pMP->mTrackProjY = v;
+    pMP->mnTrackScaleLevel = nPredictedLevel;
+    pMP->mTrackViewCos = viewCos;
+
+    return true;
+}
+
+Eigen::Vector3d Frame::UnprojectStereo(int i) {
+    float z = mvDepth[i];
+    if(z>0){
+        Eigen::Vector3d Point;
+        cv::KeyPoint kp = mvKeysUn[i];
+        Point[0] = (kp.pt.x-cx)*z*invfx;
+        Point[1] = (kp.pt.y-cy)*z*invfy;
+        Point[2] = z;
+        return mRwc*Point+mtwc;
+    }
+    else
+        return {};
 }
 
 void Frame::UndistortKeyPoints() {

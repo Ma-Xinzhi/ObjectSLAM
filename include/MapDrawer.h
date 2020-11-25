@@ -10,7 +10,6 @@
 #include <pangolin/pangolin.h>
 
 #include "Map.h"
-//#include "Frame.h"
 
 class MapDrawer{
 public:
@@ -21,7 +20,7 @@ public:
     void DrawEllipsoids();
     void DrawAxisNormal();
 
-    void SetCurrentCameraPose(const g2o::SE3Quat& pose);
+    void SetCurrentCameraPose(const Eigen::Matrix4d& pose);
     pangolin::OpenGlMatrix GetCurrentOpenGLMatrix();
 
 private:
@@ -35,7 +34,7 @@ private:
     // 这里的位姿在跟踪线程中设置，在显示线程中应用，需要锁
     std::mutex mMutexCamera;
 
-    g2o::SE3Quat mCameraPose;
+    Eigen::Matrix4d mCameraPose;
     std::shared_ptr<Map> mpMap;
 
 };

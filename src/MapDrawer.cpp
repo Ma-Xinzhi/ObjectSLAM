@@ -52,10 +52,9 @@ void MapDrawer::DrawCurrentCamera(const pangolin::OpenGlMatrix& Twc){
 }
 
 void MapDrawer::DrawTrajectory() {
-    std::vector<std::shared_ptr<Frame>> all_frame = mpMap->GetAllKeyFrame();
+    std::vector<std::shared_ptr<KeyFrame>> all_frame = mpMap->GetAllKeyFrame();
     for (const auto& frame : all_frame) {
-        g2o::SE3Quat pose = frame->GetPose();
-        Eigen::Matrix4d Twc = pose.to_homogeneous_matrix();
+        Eigen::Matrix4d Twc = frame->GetPose();
 
         const float &w = mCameraSize;
         const float h = w * 0.75;
@@ -160,13 +159,12 @@ void MapDrawer::DrawAxisNormal()
     glEnd();
 }
 
-void MapDrawer::SetCurrentCameraPose(const g2o::SE3Quat &pose) {
+void MapDrawer::SetCurrentCameraPose(const Eigen::Matrix4d &pose) {
     std::unique_lock<std::mutex> lk(mMutexCamera);
     mCameraPose = pose;
 }
 
 pangolin::OpenGlMatrix MapDrawer::GetCurrentOpenGLMatrix() {
     std::unique_lock<std::mutex> lk(mMutexCamera);
-    Eigen::Matrix4d Twc = mCameraPose.to_homogeneous_matrix();
-    return {Twc};
+    return {mCameraPose};
 }

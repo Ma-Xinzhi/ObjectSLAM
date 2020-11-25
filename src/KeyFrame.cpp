@@ -4,16 +4,16 @@
 #include "ORBmatcher.h"
 
 long unsigned int KeyFrame::nNextId = 0;
-KeyFrame::KeyFrame(Frame &F, std::shared_ptr<Map> pMap):
-    mnFrameId(F.mnId), mTimeStamp(F.mTimeStamp), mnGridCols(FRAME_GRID_COLS), mnGridRows(FRAME_GRID_ROWS),
+KeyFrame::KeyFrame(std::shared_ptr<Frame> F, std::shared_ptr<Map> pMap):
+    mnFrameId(F->mnId), mTimeStamp(F->mTimeStamp), mnGridCols(FRAME_GRID_COLS), mnGridRows(FRAME_GRID_ROWS),
     mfGridElementWidthInv(Frame::mfGridElementWidthInv), mfGridElementHeightInv(Frame::mfGridElementHeightInv),
     mnTrackReferenceForFrame(0), mnFuseTargetForKF(0), mnBALocalForKF(0), mnBAFixedForKF(0),
     fx(Frame::fx), fy(Frame::fy), cx(Frame::cx), cy(Frame::cy), invfx(Frame::invfx), invfy(Frame::invfy),
-    mbf(F.mbf), mb(F.mb), mThDepth(F.mThDepth), N(F.N), mvKeys(F.mvKeys), mvKeysUn(F.mvKeysUn),
-    mvuRight(F.mvuRight), mvDepth(F.mvDepth), mDescriptors(F.mDescriptors.clone()),mnScaleLevels(F.mnScaleLevels),
-    mfScaleFactor(F.mfScaleFactor), mfLogScaleFactor(F.mfLogScaleFactor), mvScaleFactors(F.mvScaleFactors),
-    mvLevelSigma2(F.mvLevelSigma2), mvInvLevelSigma2(F.mvInvLevelSigma2), mnMinX(Frame::mnMinX), mnMinY(Frame::mnMinY),
-    mnMaxX(Frame::mnMaxX), mnMaxY(Frame::mnMaxY), mK(F.mK), mvpMapPoints(F.mvpMapPoints),mbFirstConnection(true),
+    mbf(F->mbf), mb(F->mb), mThDepth(F->mThDepth), N(F->N), mvKeys(F->mvKeys), mvKeysUn(F->mvKeysUn),
+    mvuRight(F->mvuRight), mvDepth(F->mvDepth), mDescriptors(F->mDescriptors.clone()),mnScaleLevels(F->mnScaleLevels),
+    mfScaleFactor(F->mfScaleFactor), mfLogScaleFactor(F->mfLogScaleFactor), mvScaleFactors(F->mvScaleFactors),
+    mvLevelSigma2(F->mvLevelSigma2), mvInvLevelSigma2(F->mvInvLevelSigma2), mnMinX(Frame::mnMinX), mnMinY(Frame::mnMinY),
+    mnMaxX(Frame::mnMaxX), mnMaxY(Frame::mnMaxY), mK(F->mK), mvpMapPoints(F->mvpMapPoints),mbFirstConnection(true),
     mpParent(nullptr), mbNotErase(false), mbToBeErased(false), mbBad(false), mpMap(pMap)
 {
     mnId = nNextId++;
@@ -22,9 +22,9 @@ KeyFrame::KeyFrame(Frame &F, std::shared_ptr<Map> pMap):
     for(int i=0; i<mnGridCols; i++){
         mGrid[i].resize(mnGridRows);
         for(int j=0; j<mnGridRows; j++)
-            mGrid[i][j] = F.mGrid[i][j];
+            mGrid[i][j] = F->mGrid[i][j];
     }
-    SetPose(F.GetPose());
+    SetPose(F->GetPose());
 }
 
 void KeyFrame::SetPose(const Eigen::Matrix4d &Twc) {
