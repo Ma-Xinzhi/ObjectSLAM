@@ -18,7 +18,7 @@ public:
 
     void GrabPoseAndSingleObject(const g2o::SE3Quat& pose, std::shared_ptr<Observation> bbox, const cv::Mat& img_RGB);
     void GrabPoseAndObjects(const g2o::SE3Quat& pose, const Observations& bbox, const cv::Mat& img_RGB);
-    void GrabRGBDImageAndSingleObject(const cv::Mat& img_RGB, const cv::Mat& depth, std::shared_ptr<Observation> bbox);
+    void GrabRGBDImageAndObjects(const cv::Mat& img_RGB, const cv::Mat& depth, std::shared_ptr<Observation> bbox);
 
     Eigen::Matrix3d GetCalib() const { return mCalib; }
 
@@ -72,8 +72,8 @@ public:
 
     // Lists used to recover the full camera trajectory at the end of the execution.
     // Basically we store the reference keyframe for each frame and its relative transformation
-    std::list<cv::Mat> mlRelativeFramePoses;
-    std::list<KeyFrame*> mlpReferences;
+    std::list<Eigen::Matrix4d> mlRelativeFramePoses;
+    std::list<std::shared_ptr<KeyFrame>> mlpReferences;
     std::list<double> mlFrameTimes;
     std::list<bool> mlbLost;
 
@@ -87,7 +87,7 @@ private:
     std::shared_ptr<ORBextractor> mpORBextractor;
 
     // Motion Model
-    Eigen::Matrix4d mVelocity;
+    Eigen::Matrix4d mVelocity; // T_last_current
     bool mbVelocity;
 
     int mImgWidth, mImgHeight;

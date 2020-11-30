@@ -1,5 +1,6 @@
 #include "Tracking.h"
 #include "ORBmatcher.h"
+#include "Optimizer.h"
 #include "utils/dataprocess_utils.h"
 
 #include <set>
@@ -8,7 +9,7 @@
 Tracking::Tracking(const std::string &strSettingPath, std::shared_ptr<Map> pMap, std::shared_ptr<MapDrawer> pMapDrawer,
              std::shared_ptr<FrameDrawer> pFrameDrawer): mState(NO_IMAGES_YET), mpMap(pMap), mpMapDrawer(pMapDrawer),
              mpFrameDrawer(pFrameDrawer), mnLastRelocFrameId(0), mpCurrentFrame(nullptr), mpLastFrame(nullptr),
-             mpLastKeyFrame(nullptr), mpReferenceKF(nullptr){
+             mpLastKeyFrame(nullptr), mpReferenceKF(nullptr), mbVelocity(false){
     cv::FileStorage fSettings(strSettingPath, cv::FileStorage::READ);
     double fx = fSettings["Camera.fx"];
     double fy = fSettings["Camera.fy"];
@@ -65,9 +66,6 @@ Tracking::Tracking(const std::string &strSettingPath, std::shared_ptr<Map> pMap,
 
     mThDepth = mbf*(float)fSettings["ThDepth"]/fx;
 
-    mVelocity = Eigen::Matrix4d::Identity();
-    mbVelocity = false;
-
     mDepthMapFactor = fSettings["DepthMapFactor"];
     if(fabs(mDepthMapFactor) < 1e-5)
         mDepthMapFactor = 1;
@@ -103,7 +101,7 @@ void Tracking::GrabPoseAndObjects(const g2o::SE3Quat &pose, const Observations &
 
 }
 
-void Tracking::GrabRGBDImageAndSingleObject(const cv::Mat &img_RGB, const cv::Mat &depth,
+void Tracking::GrabRGBDImageAndObjects(const cv::Mat &img_RGB, const cv::Mat &depth,
                                          std::shared_ptr<Observation> bbox) {
     mCurImg = img_RGB;
     cv::Mat imDepth = depth;
@@ -139,26 +137,90 @@ void Tracking::Track() {
 
     if(mState == NOT_INITIALIZED){
         StereoInitialization();
+        // TODO 这里需要进行物体检测,再update viewer
         mpFrameDrawer->Update(std::shared_ptr<Tracking>(this));
         if(mState != OK)
             return;
     }
     else{
-        bool bOK;
+        bool bOK = false;
         if(mState == OK){
             // TODO 这里是Local Mapping可能会改变一些地图点，需要斟酌一下
             CheckReplacedInLastFrame();
-
-            if(!mbVelocity || mpCurrentFrame->mnId < mnLastRelocFrameId+2)
-                bOK = TrackReferenceKeyFrame();
-            else{
+            // TODO 这里跟踪参考关键帧考虑采用光流法跟踪，作为一个粗略估计
+//            if(!mbVelocity || mpCurrentFrame->mnId < mnLastRelocFrameId+2)
+//                bOK = TrackReferenceKeyFrame();
+//            else{
+//                bOK = TrackWithMotionModel();
+//                if(!bOK)
+//                    bOK = TrackReferenceKeyFrame();
+//            }
+            // 先按照前后帧进行跟踪
+            if(mbVelocity)
                 bOK = TrackWithMotionModel();
-                if(!bOK)
-                    bOK = TrackReferenceKeyFrame();
+        }
+        else{
+            // TODO 重定位方法的考虑
+//            bOK = Relocalization();
+            LOG(INFO) << "Tracking is lost...." << std::endl;
+            return;
+        }
+
+        mpCurrentFrame->mpReferenceKF = mpReferenceKF;
+
+        // 前后帧跟踪后，跟踪局部地图
+        if(bOK)
+            bOK = TrackLocalMap();
+
+        // Update drawer
+        mpFrameDrawer->Update(std::shared_ptr<Tracking>(this));
+
+        // If tracking were good, check if we insert a keyframe
+        if(bOK){
+            mState = OK;
+            if(mpLastFrame){
+                Eigen::Matrix4d Twl = mpLastFrame->GetPose();
+                Eigen::Matrix4d Twc = mpCurrentFrame->GetPose();
+                mVelocity = Twl.reverse()*Twc;
+                mbVelocity = true;
+            }
+            else{
+                mVelocity = Eigen::Matrix4d::Identity();
+                mbVelocity = false;
+            }
+
+            mpMapDrawer->SetCurrentCameraPose(mpCurrentFrame->GetPose());
+
+            for (int i = 0; i < mpCurrentFrame->N; ++i) {
+                std::shared_ptr<MapPoint> pMP = mpCurrentFrame->mvpMapPoints[i];
+                if(pMP){
+                    if(pMP->Observations() < 1){
+                        mpCurrentFrame->mvbOutlier[i] = false;
+                        mpCurrentFrame->mvpMapPoints[i] = nullptr;
+                    }
+                }
+            }
+
+            if(NeedNewKeyFrame())
+                CreateNewKeyFrame();
+
+            for (int i = 0; i < mpCurrentFrame->N; ++i) {
+                if(mpCurrentFrame->mvpMapPoints[i] && mpCurrentFrame->mvbOutlier[i])
+                    mpCurrentFrame->mvpMapPoints[i] = nullptr;
             }
         }
+        else
+            mState = LOST;
+
+        mpLastFrame = mpCurrentFrame;
     }
 
+    // 这里是存储信息，用于后面恢复完整的相机轨迹
+    Eigen::Matrix4d Twc = mpCurrentFrame->GetPose();
+    mlRelativeFramePoses.emplace_back(mpReferenceKF->GetPose().inverse()*Twc);
+    mlpReferences.push_back(mpReferenceKF);
+    mlFrameTimes.push_back(mpCurrentFrame->mTimeStamp);
+    mlbLost.push_back(mState == LOST);
 }
 
 // 剔除当前帧中不好的检测结果
@@ -269,20 +331,342 @@ void Tracking::CheckReplacedInLastFrame() {
         }
     }
 }
-
+/// 这里有问题，这么选择的话需要知道当前帧的位姿信息，但是当前帧的位姿是不知道的
+/// 根据参考关键帧的追踪，其实主要是重定位的时候用到或者前后帧跟踪结果不好
+// TODO 不用DBoW进行匹配，可否考虑采用光流法，进行快速的粗略估计
 bool Tracking::TrackReferenceKeyFrame() {
-    ORBmatcher matcher(0.7, true);
+//    std::vector<uchar> statue;
+//    cv::Mat error;
+//    cv::calcOpticalFlowPyrLK(mpReferenceKF)
+//    int nmatches = matcher.SearchByProjection(mpCurrentFrame, mpReferenceKF);
+//
+//    if(nmatches < 15)
+//        return false;
+//    //先按照上一帧位姿结果给定当前帧初值
+//    mpCurrentFrame->SetPose(mpLastFrame->GetPose());
+//
+//    Optimizer::PoseOptimization(mpCurrentFrame);
+//
+//    int nmatchesMap = 0;
+//    for(int i=0; i<mpCurrentFrame->N; i++){
+//
+//    }
+}
 
-    int nmatches = matcher.SearchByProjection(mpCurrentFrame, mpReferenceKF);
+bool Tracking::TrackWithMotionModel() {
+    ORBmatcher matcher(0.9, true);
+    // TODO 这里的意思应该是关键帧的位姿会进行优化，所以存储相对位姿，再根据优化更新上一帧的位姿，先省略
+//    UpdateLastFrame();
+    mpCurrentFrame->SetPose(mpLastFrame->GetPose()*mVelocity);
+    // 这里似乎没有必要
+    std::fill(mpCurrentFrame->mvpMapPoints.begin(), mpCurrentFrame->mvpMapPoints.end(), nullptr);
 
-    if(nmatches < 15)
+    int th = 7;
+
+    int nmatches = matcher.SearchByProjection(mpCurrentFrame, mpLastFrame, th, false);
+
+    if(nmatches < 20){
+        std::fill(mpCurrentFrame->mvpMapPoints.begin(), mpCurrentFrame->mvpMapPoints.end(), nullptr);
+        nmatches = matcher.SearchByProjection(mpCurrentFrame, mpLastFrame, 2*th, false);
+    }
+
+    if(nmatches < 20)
         return false;
 
-    mpCurrentFrame->SetPose(mpLastFrame->GetPose());
+    Optimizer::PoseOptimization(mpCurrentFrame);
 
+    int nmatchesMap = 0;
+    for(int i=0; i<mpCurrentFrame->N; i++){
+        if(mpCurrentFrame->mvpMapPoints[i]){
+            if(mpCurrentFrame->mvbOutlier[i]){
+                std::shared_ptr<MapPoint> pMP = mpCurrentFrame->mvpMapPoints[i];
+                mpCurrentFrame->mvpMapPoints[i] = nullptr;
+                mpCurrentFrame->mvbOutlier[i] = false;
+                pMP->mbTrackInView = false;
+                pMP->mnLastFrameSeen = mpCurrentFrame->mnId;
+                nmatches--;
+            }
+            else if(mpCurrentFrame->mvpMapPoints[i]->Observations() > 0)
+                nmatchesMap++;
+        }
+    }
+    return nmatchesMap >= 10;
+}
 
+void Tracking::UpdateLastFrame() {
+    std::shared_ptr<KeyFrame> pRef = mpLastFrame->mpReferenceKF;
+    Eigen::Matrix4d Trl = mlRelativeFramePoses.back();
+
+    mpLastFrame->SetPose(pRef->GetPose()*Trl);
+}
+
+bool Tracking::TrackLocalMap() {
+    UpdateLocalMap();
+
+    SearchLocalPoints();
+
+    Optimizer::PoseOptimization(mpCurrentFrame);
+
+    mnMatchesInliers = 0;
+
+    for(int i=0; i<mpCurrentFrame->N; ++i){
+        if(mpCurrentFrame->mvpMapPoints[i])
+        {
+            if(!mpCurrentFrame->mvbOutlier[i])
+            {
+                mpCurrentFrame->mvpMapPoints[i]->IncreaseFound();
+                if(mpCurrentFrame->mvpMapPoints[i]->Observations()>0)
+                    mnMatchesInliers++;
+            }
+        }
+    }
+
+    if(mnMatchesInliers < 30)
+        return false;
+    else
+        return true;
+}
+
+void Tracking::UpdateLocalMap() {
+    // 用于可视化
+    mpMap->SetReferenceMapPoints(mvpLocalMapPoints);
+
+    UpdateLocalKeyFrames();
+    UpdateLocalPoints();
+}
+
+void Tracking::UpdateLocalKeyFrames() {
+    std::map<std::shared_ptr<KeyFrame>, int> kfCounter;
+    for(int i=0; i<mpCurrentFrame->N; ++i){
+        std::shared_ptr<MapPoint> pMP = mpCurrentFrame->mvpMapPoints[i];
+        if(pMP){
+            if(pMP->isBad())
+                pMP = nullptr;
+            else{
+                std::map<std::shared_ptr<KeyFrame>, size_t> observations = pMP->GetObservations();
+                for(auto& ob : observations)
+                    kfCounter[ob.first]++;
+            }
+        }
+    }
+
+    if(kfCounter.empty())
+        return;
+
+    int max=0;
+    std::shared_ptr<KeyFrame> pKFmax = nullptr;
+
+    mvpLocalKeyFrames.clear();
+    mvpLocalKeyFrames.reserve(3*kfCounter.size());
+
+    // All keyframes that observe a map point are included in the local map. Also check which keyframe shares most points
+    for(auto& cnt : kfCounter){
+        std::shared_ptr<KeyFrame> pKF = cnt.first;
+
+        if(pKF->isBad())
+            continue;
+
+        if(cnt.second > max){
+            max = cnt.second;
+            pKFmax = pKF;
+        }
+
+        mvpLocalKeyFrames.push_back(pKF);
+        pKF->mnTrackReferenceForFrame = mpCurrentFrame->mnId;
+    }
+
+    // Include also some not-already-included keyframes that are neighbors to already-included keyframes
+    for(auto& pKF : mvpLocalKeyFrames){
+        // Limit the number of keyframes
+        if(mvpLocalKeyFrames.size() > 80)
+            break;
+
+        std::vector<std::shared_ptr<KeyFrame>> vNeighs = pKF->GetBestCovisibilityKeyFrames(10);
+
+        for(auto& pNeighKF : vNeighs){
+            if(!pNeighKF->isBad()){
+                if(pNeighKF->mnTrackReferenceForFrame != mpCurrentFrame->mnId){
+                    mvpLocalKeyFrames.push_back(pNeighKF);
+                    pNeighKF->mnTrackReferenceForFrame = mpCurrentFrame->mnId;
+                    break;
+                }
+            }
+        }
+
+        std::set<std::shared_ptr<KeyFrame>> spChilds = pKF->GetChilds();
+        for(auto& pChildKF : spChilds){
+            if(!pChildKF->isBad()){
+                if(pChildKF->mnTrackReferenceForFrame != mpCurrentFrame->mnId){
+                    mvpLocalKeyFrames.push_back(pChildKF);
+                    pChildKF->mnTrackReferenceForFrame = mpCurrentFrame->mnId;
+                    break;
+                }
+            }
+        }
+
+        std::shared_ptr<KeyFrame> pParent = pKF->GetParent();
+        if(pParent){
+            if(pParent->mnTrackReferenceForFrame != mpCurrentFrame->mnId){
+                mvpLocalKeyFrames.push_back(pParent);
+                pParent->mnTrackReferenceForFrame = mpCurrentFrame->mnId;
+                break;
+            }
+        }
+    }
+
+    if(pKFmax){
+        mpReferenceKF = pKFmax;
+        mpCurrentFrame->mpReferenceKF = mpReferenceKF;
+    }
+}
+
+void Tracking::UpdateLocalPoints() {
+    mvpLocalMapPoints.clear();
+
+    for(auto& pKF : mvpLocalKeyFrames){
+        std::vector<std::shared_ptr<MapPoint>> vpMPs = pKF->GetMapPointMatches();
+
+        for(auto& pMP : vpMPs){
+            if(!pMP)
+                continue;
+            if(pMP->mnTrackReferenceForFrame == mpCurrentFrame->mnId)
+                continue;
+            if(!pMP->isBad()){
+                mvpLocalMapPoints.push_back(pMP);
+                pMP->mnTrackReferenceForFrame = mpCurrentFrame->mnId;
+            }
+        }
+    }
+}
+
+void Tracking::SearchLocalPoints() {
+    // Do not search map points already matched
+    for(auto pMP : mpCurrentFrame->mvpMapPoints){
+        if(pMP){
+            if(pMP->isBad())
+                pMP = nullptr;
+            else{
+                pMP->IncreaseVisible();
+                pMP->mnLastFrameSeen = mpCurrentFrame->mnId;
+                // 这里指已经找到相关联的点，不需要再进行跟踪
+                pMP->mbTrackInView = false;
+            }
+        }
+    }
+
+    int nToMatch = 0;
+
+    for(auto& pMP : mvpLocalMapPoints){
+        if(pMP->mnLastFrameSeen == mpCurrentFrame->mnId)
+            continue;
+        if(pMP->isBad())
+            continue;
+        if(mpCurrentFrame->isInFrustum(pMP, 0.5)){
+            pMP->IncreaseVisible();
+            nToMatch++;
+        }
+    }
+
+    if(nToMatch > 0){
+        ORBmatcher matcher(0.8);
+        int th = 3;
+        matcher.SearchByProjection(mpCurrentFrame, mvpLocalMapPoints, th);
+    }
 }
 
 bool Tracking::NeedNewKeyFrame() {
-    return true;
+    int nKFs = mpMap->KeyFramesInMap();
+
+    if(mpCurrentFrame->mnId < mnLastRelocFrameId+mMaxFrames && nKFs > mMaxFrames)
+        return false;
+
+    int nMinObs = 3;
+    if(nKFs <= 2)
+        nMinObs = 2;
+    int nRefMatches = mpReferenceKF->TrackedMapPoints(nMinObs);
+
+    int nNonTrackedClose = 0;
+    int nTrackedClose = 0;
+
+    for (int i = 0; i < mpCurrentFrame->N; ++i) {
+        if(mpCurrentFrame->mvDepth[i]>0 && mpCurrentFrame->mvDepth[i]<mThDepth){
+            if(mpCurrentFrame->mvpMapPoints[i] && !mpCurrentFrame->mvbOutlier[i])
+                nTrackedClose++;
+            else
+                nNonTrackedClose++;
+        }
+    }
+
+    bool bNeedToInsertClose = nTrackedClose < 100 && nNonTrackedClose > 70;
+
+    float thRefRatio = 0.75;
+    if(nKFs<2)
+        thRefRatio = 0.4;
+
+    bool c1a = mpCurrentFrame->mnId >= mnLastKeyFrameId+mMaxFrames;
+//    bool c1b = mpCurrentFrame->mnId >= mnLastKeyFrameId + mMinFrames && bLocalMappingIdle;
+    bool c1c = mnMatchesInliers < nRefMatches*0.25 || bNeedToInsertClose;
+
+    bool c2 = (mnMatchesInliers < nRefMatches*thRefRatio || bNeedToInsertClose) && mnMatchesInliers > 15;
+
+    if((c1a||c1c) && c2)
+        return true;
+    else
+        return false;
+}
+
+void Tracking::CreateNewKeyFrame()
+{
+    std::shared_ptr<KeyFrame> pKF = std::make_shared<KeyFrame>(mpCurrentFrame, mpMap);
+
+    mpReferenceKF = pKF;
+    mpCurrentFrame->mpReferenceKF = pKF;
+
+    std::vector<std::pair<float, int>> vDepthIdx;
+    vDepthIdx.reserve(mpCurrentFrame->N);
+    for (int i = 0; i < mpCurrentFrame->N; ++i) {
+        float z = mpCurrentFrame->mvDepth[i];
+        if(z > 0)
+            vDepthIdx.emplace_back(std::make_pair(z, i));
+    }
+
+    if(!vDepthIdx.empty()){
+        sort(vDepthIdx.begin(), vDepthIdx.end());
+
+        int nPoints = 0;
+        for(auto& item : vDepthIdx){
+            int idx = item.second;
+
+            bool bCreateNew = false;
+
+            std::shared_ptr<MapPoint> pMP = mpCurrentFrame->mvpMapPoints[idx];
+            if(!pMP)
+                bCreateNew = true;
+            // 这里可以直接看该点是否是坏点
+            else if(pMP->isBad()){
+                bCreateNew = true;
+                mpCurrentFrame->mvpMapPoints[idx] = nullptr;
+            }
+
+            if(bCreateNew){
+                Eigen::Vector3d x3D = mpCurrentFrame->UnprojectStereo(idx);
+                std::shared_ptr<MapPoint> pNewMP = std::make_shared<MapPoint>(x3D, pKF, mpMap);
+                pNewMP->AddObservation(pKF, idx);
+                pKF->AddMapPoint(pNewMP, idx);
+                pNewMP->ComputeDistinctiveDescriptors();
+                pNewMP->UpdateNormalAndDepth();
+                mpMap->AddMapPoint(pNewMP);
+
+                mpCurrentFrame->mvpMapPoints[idx] = pNewMP;
+            }
+            nPoints++;
+            if(item.first > mThDepth && nPoints > 100)
+                break;
+        }
+    }
+
+//    mpLocalMapper->InsertKeyFrame(pKF);
+
+    mnLastKeyFrameId = mpCurrentFrame->mnId;
+    mpLastKeyFrame = pKF;
 }

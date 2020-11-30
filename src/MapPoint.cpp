@@ -5,11 +5,20 @@
 long unsigned int MapPoint::nNextId = 0;
 std::mutex MapPoint::mGlobalMutex;
 
-MapPoint::MapPoint(const Eigen::Vector3d &Pos, std::shared_ptr<KeyFrame> pRefKF, std::shared_ptr<Map> pMap){}
+MapPoint::MapPoint(const Eigen::Vector3d &Pos, std::shared_ptr<KeyFrame> pRefKF, std::shared_ptr<Map> pMap):
+                   mWorldPos(Pos), mnFirstKFid(pRefKF->mnId), mnFirstFrame(pRefKF->mnFrameId), nObs(0),
+                   mnTrackReferenceForFrame(-1), mnLastFrameSeen(-1), mnBALocalForKF(-1), mnFuseCandidateForKF(-1),
+                   mpRefKF(pRefKF), mnVisible(1), mnFound(1), mbBad(false), mpReplaced(nullptr), mfMinDistance(0),
+                   mfMaxDistance(0), mpMap(pMap){
+    mNormalVector = Eigen::Vector3d::Zero();
+
+    std::unique_lock<std::mutex> lk(mpMap.lock()->mMutexPointCreation);
+    mnId = nNextId++;
+}
 
 MapPoint::MapPoint(const Eigen::Vector3d &Pos, std::shared_ptr<Map> pMap, std::shared_ptr<Frame> pFrame,
-                   const int &idxF): mWorldPos(Pos), mnFirstKFid(-1), mnFirstFrame(pFrame->mnId), nObs(0), mnTrackReferenceForFrame(0),
-                   mnLastFrameSeen(0), mnBALocalForKF(0), mnFuseCandidateForKF(0), mpRefKF(nullptr), mnVisible(1),
+                   const int &idxF): mWorldPos(Pos), mnFirstKFid(-1), mnFirstFrame(pFrame->mnId), nObs(0), mnTrackReferenceForFrame(-1),
+                   mnLastFrameSeen(-1), mnBALocalForKF(-1), mnFuseCandidateForKF(-1), mpRefKF(nullptr), mnVisible(1),
                    mnFound(1), mbBad(false), mpReplaced(nullptr), mpMap(pMap){
     Eigen::Vector3d Ow = pFrame->GetCameraCenter();
     mNormalVector = mWorldPos - Ow;
@@ -79,7 +88,7 @@ void MapPoint::EraseObservation(std::shared_ptr<KeyFrame> pKF) {
                 nObs--;
             mObservations.erase(pKF);
 
-            if(mpRefKF.get() == pKF.get())
+            if(mpRefKF == pKF)
                 mpRefKF = std::shared_ptr<KeyFrame>(mObservations.begin()->first);
 
             if(nObs<=2)

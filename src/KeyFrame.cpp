@@ -7,7 +7,7 @@ long unsigned int KeyFrame::nNextId = 0;
 KeyFrame::KeyFrame(std::shared_ptr<Frame> F, std::shared_ptr<Map> pMap):
     mnFrameId(F->mnId), mTimeStamp(F->mTimeStamp), mnGridCols(FRAME_GRID_COLS), mnGridRows(FRAME_GRID_ROWS),
     mfGridElementWidthInv(Frame::mfGridElementWidthInv), mfGridElementHeightInv(Frame::mfGridElementHeightInv),
-    mnTrackReferenceForFrame(0), mnFuseTargetForKF(0), mnBALocalForKF(0), mnBAFixedForKF(0),
+    mnTrackReferenceForFrame(-1), mnFuseTargetForKF(-1), mnBALocalForKF(-1), mnBAFixedForKF(-1),
     fx(Frame::fx), fy(Frame::fy), cx(Frame::cx), cy(Frame::cy), invfx(Frame::invfx), invfy(Frame::invfy),
     mbf(F->mbf), mb(F->mb), mThDepth(F->mThDepth), N(F->N), mvKeys(F->mvKeys), mvKeysUn(F->mvKeysUn),
     mvuRight(F->mvuRight), mvDepth(F->mvDepth), mDescriptors(F->mDescriptors.clone()),mnScaleLevels(F->mnScaleLevels),
