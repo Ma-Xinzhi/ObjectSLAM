@@ -3,7 +3,7 @@
 #include "Map.h"
 #include "ORBmatcher.h"
 
-long unsigned int KeyFrame::nNextId = 0;
+unsigned long int KeyFrame::nNextId = 0;
 KeyFrame::KeyFrame(std::shared_ptr<Frame> F, std::shared_ptr<Map> pMap):
     mnFrameId(F->mnId), mTimeStamp(F->mTimeStamp), mnGridCols(FRAME_GRID_COLS), mnGridRows(FRAME_GRID_ROWS),
     mfGridElementWidthInv(Frame::mfGridElementWidthInv), mfGridElementHeightInv(Frame::mfGridElementHeightInv),
@@ -100,12 +100,12 @@ std::vector<std::shared_ptr<KeyFrame> > KeyFrame::GetVectorCovisibleKeyFrames() 
     return mvpOrderedConnectedKeyFrames;
 }
 
-std::vector<std::shared_ptr<KeyFrame>> KeyFrame::GetBestCovisibilityKeyFrames(int N) {
+std::vector<std::shared_ptr<KeyFrame>> KeyFrame::GetBestCovisibilityKeyFrames(int nums) {
     std::unique_lock<std::mutex> lk(mMutexConnections);
-    if(mvpOrderedConnectedKeyFrames.size() < N)
+    if(mvpOrderedConnectedKeyFrames.size() < nums)
         return mvpOrderedConnectedKeyFrames;
     else
-        return std::vector<std::shared_ptr<KeyFrame>>(mvpOrderedConnectedKeyFrames.begin(), mvpOrderedConnectedKeyFrames.begin()+N);
+        return std::vector<std::shared_ptr<KeyFrame>>(mvpOrderedConnectedKeyFrames.begin(), mvpOrderedConnectedKeyFrames.begin()+nums);
 }
 
 std::vector<std::shared_ptr<KeyFrame>> KeyFrame::GetCovisiblesByWeight(int w) {
@@ -222,7 +222,7 @@ void KeyFrame::UpdateConnections() {
     std::shared_ptr<KeyFrame> pKFmax = nullptr;
     int th = 15;
 
-    // 如果当前帧的地图点有超过一定阈值的关键帧数量，当前帧与这些关键帧就建立联系，其他关键帧增加当前帧之间的关联
+    // 如果当前帧的地图点有超过一定阈值数量，在其他关键帧中观察到，当前帧与这些关键帧就建立联系，其他关键帧增加当前帧之间的关联
     std::vector<std::pair<int, std::shared_ptr<KeyFrame>>> vPairs;
     vPairs.reserve(KFcounter.size());
     for(auto& item : KFcounter){

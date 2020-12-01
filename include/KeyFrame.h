@@ -31,7 +31,7 @@ public:
     void UpdateBestCovisibles();
     std::set<std::shared_ptr<KeyFrame>> GetConnectedKeyFrames();
     std::vector<std::shared_ptr<KeyFrame> > GetVectorCovisibleKeyFrames();
-    std::vector<std::shared_ptr<KeyFrame>> GetBestCovisibilityKeyFrames(int N);
+    std::vector<std::shared_ptr<KeyFrame>> GetBestCovisibilityKeyFrames(int nums);
     std::vector<std::shared_ptr<KeyFrame>> GetCovisiblesByWeight(int w);
     int GetWeight(std::shared_ptr<KeyFrame> pKF);
 
@@ -77,9 +77,9 @@ public:
     }
 public:
 
-    static long unsigned int nNextId;
-    long unsigned int mnId;
-    const long unsigned int mnFrameId;
+    static unsigned long int nNextId;
+    unsigned long int mnId;
+    const unsigned long int mnFrameId;
 
     const double mTimeStamp;
 

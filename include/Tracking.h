@@ -8,6 +8,7 @@
 #include "FrameDrawer.h"
 #include "MapDrawer.h"
 #include "ORBextractor.h"
+#include "LocalMapping.h"
 
 #include <list>
 

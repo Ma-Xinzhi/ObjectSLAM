@@ -440,9 +440,9 @@ int ORBmatcher::SearchByProjection(std::shared_ptr<Frame> pCurrentFrame, std::sh
 // TODO ORB中利用DBOW做的关键帧间的匹配，为保证匹配的准确性，利用了极线约束
 //  这里不使用DBOW，我觉得可以利用语义信息做关联，或许比DBOW会好点
 
-int ORBmatcher::SearchForTriangulation(std::shared_ptr<KeyFrame> pKF1, std::shared_ptr<KeyFrame> pKF2, cv::Mat F12,
-                                       std::vector<std::pair<size_t, size_t>> &vMatchedPairs,
-                                       const bool bOnlyStereo) {
+/// 先用特征点匹配进行三角化的关联
+int ORBmatcher::SearchForTriangulation(std::shared_ptr<KeyFrame> pKF1, std::shared_ptr<KeyFrame> pKF2, const Eigen::Matrix3d& F12,
+                                       std::vector<std::pair<size_t, size_t>> &vMatchedPairs) {
 
 }
 
@@ -848,11 +848,11 @@ float ORBmatcher::RadiusByViewingCos(float viewCos) {
         return 4.0;
 }
 
-bool ORBmatcher::CheckDistEpipolarLine(const cv::KeyPoint &kp1, const cv::KeyPoint &kp2, const cv::Mat &F12,
+bool ORBmatcher::CheckDistEpipolarLine(const cv::KeyPoint &kp1, const cv::KeyPoint &kp2, const Eigen::Matrix3d &F12,
                                        const std::shared_ptr<KeyFrame> pKF) {
-    float a = kp1.pt.x*F12.at<float>(0,0)+kp1.pt.y*F12.at<float>(1,0)+F12.at<float>(2,0);
-    float b = kp1.pt.x*F12.at<float>(0,1)+kp1.pt.y*F12.at<float>(1,1)+F12.at<float>(2,1);
-    float c = kp1.pt.x*F12.at<float>(0,2)+kp1.pt.y*F12.at<float>(1,2)+F12.at<float>(2,2);
+    float a = kp1.pt.x*F12(0,0)+kp1.pt.y*F12(1,0)+F12(2,0);
+    float b = kp1.pt.x*F12(0,1)+kp1.pt.y*F12(1,1)+F12(2,1);
+    float c = kp1.pt.x*F12(0,2)+kp1.pt.y*F12(1,2)+F12(2,2);
 
     float num = a*kp2.pt.x+b*kp2.pt.y+c;
 

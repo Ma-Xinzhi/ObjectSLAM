@@ -53,12 +53,17 @@ add_library(${PROJECT_NAME} SHARED
         src/Dataset.cpp
         src/Detector.cpp
         src/ORBextractor.cpp
-        src/MapPoint.cpp src/KeyFrame.cpp src/ORBmatcher.cpp src/Optimizer.cpp)
+        src/MapPoint.cpp
+        src/KeyFrame.cpp
+        src/ORBmatcher.cpp
+        src/Optimizer.cpp
+        src/LocalMapping.cpp)
 
 set(THIRD_PARTY_LIBS
         ${OpenCV_LIBS}
         ${EIGEN3_LIBRARIES}
         ${PROJECT_SOURCE_DIR}/Thirdparty/g2o/lib/libg2o.so
+        ${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so
         ${PROJECT_SOURCE_DIR}/Thirdparty/Yolo/libdarknet.so
         ${Pangolin_LIBRARIES}
         ${GLOG_LIBRARIES}

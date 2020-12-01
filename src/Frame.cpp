@@ -59,7 +59,7 @@ Frame::Frame(const cv::Mat &imGray, const cv::Mat &depth, double timeStamp, std:
 
     mpReferenceKF = nullptr;
 
-    //TODO 这里如果是Keyframe的话，将目标检测的信息考虑进来
+    //TODO 这里如果是Keyframe的话，将目标检测的信息考虑进来(答，在KeyFrame里面做)
     AssignFeaturesToGrid();
 }
 
