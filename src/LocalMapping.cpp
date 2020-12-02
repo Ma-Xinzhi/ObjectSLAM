@@ -7,7 +7,7 @@
 
 LocalMapping::LocalMapping(std::shared_ptr<Map> pMap): mpMap(pMap), mbResetRequested(false),
     mbFinishRequested(false), mbFinished(true), mbAbortBA(false), mbStopped(false), mbStopRequested(false),
-    mbNotStop(false), mbAcceptKeyFrames(true){}
+    mbNotStop(false), mbAcceptKeyFrames(true), mbMonocular(false){}
 
 void LocalMapping::SetTracker(std::shared_ptr<Tracking> pTracker) {
     mpTracker = pTracker;
@@ -25,8 +25,33 @@ void LocalMapping::Run() {
 
             CreateNewMapPoints();
 
+            if(!CheckNewKeyFrames())
+                SearchInNeighbors();
 
+            mbAbortBA = false;
+
+            if(!CheckNewKeyFrames() && !StopRequested()){
+                if(mpMap->KeyFramesInMap()>2)
+                    Optimizer::LocalBundleAdjustment(mpCurrentKeyFrame, &mbAbortBA, mpMap);
+
+                KeyFrameCulling();
+            }
         }
+        else if(Stop()){
+            while(isStopped() && !CheckFinish())
+                usleep(3000);
+            if(CheckFinish())
+                break;
+        }
+
+        ResetIfRequested();
+
+        SetAcceptKeyFrames(true);
+
+        if(CheckFinish())
+            break;
+
+        usleep(3000);
     }
 
     SetFinish();
@@ -56,14 +81,15 @@ void LocalMapping::ProcessNewKeyFrame() {
         std::shared_ptr<MapPoint> pMP = vpMapPointMatches[i];
         if(pMP){
             if(!pMP->isBad()){
+                // 匹配到的地图已有地图点
                 if(!pMP->IsInKeyFrame(mpCurrentKeyFrame)){
                     pMP->AddObservation(mpCurrentKeyFrame, i);
                     pMP->UpdateNormalAndDepth();
                     pMP->ComputeDistinctiveDescriptors();
                 }
-                else // this can only happen for new stereo points inserted by the Tracking
+//                else // this can only happen for new stereo points inserted by the Tracking
                     // 在构建关键帧的时候，双目/RGB-D相机能够自己构造一些地图点
-                    mlpRecentAddedMapPoints.push_back(pMP);
+//                    mlpRecentAddedMapPoints.push_back(pMP);
             }
         }
     }
@@ -74,7 +100,6 @@ void LocalMapping::ProcessNewKeyFrame() {
     mpMap->AddKeyFrame(mpCurrentKeyFrame);
 }
 
-// 检查新添加的地图点
 void LocalMapping::MapPointCulling() {
     auto lit = mlpRecentAddedMapPoints.begin();
     unsigned long int nCurrentKFid = mpCurrentKeyFrame->mnId;
@@ -85,17 +110,17 @@ void LocalMapping::MapPointCulling() {
         std::shared_ptr<MapPoint> pMP = *lit;
         if(pMP->isBad())
             lit = mlpRecentAddedMapPoints.erase(lit);
-        // 如果匹配率太低的话，舍弃该点
+            // 如果匹配率太低的话，舍弃该点
         else if(pMP->GetFoundRatio() < 0.25){
             pMP->SetBadFlag();
             lit = mlpRecentAddedMapPoints.erase(lit);
         }
-        // 如果当前帧相较于地图点创建时的关键帧有点距离，但是观测次数很少，舍弃该点
+            // 如果当前帧相较于地图点创建时的关键帧有点距离，但是观测次数很少，舍弃该点
         else if(nCurrentKFid-pMP->mnFirstKFid >= 2 && pMP->Observations() <= 3){
             pMP->SetBadFlag();
             lit = mlpRecentAddedMapPoints.erase(lit);
         }
-        // 如果当前帧相较于地图点创建时的关键帧太远，舍弃该点
+            // 如果当前帧相较于地图点创建时的关键帧太远，舍弃该点
         else if(nCurrentKFid-pMP->mnFirstKFid >= 3)
             lit = mlpRecentAddedMapPoints.erase(lit);
         else
@@ -104,48 +129,49 @@ void LocalMapping::MapPointCulling() {
 }
 
 void LocalMapping::CreateNewMapPoints() {
-    int nn = 10;
 
-    std::vector<std::shared_ptr<KeyFrame>> vpNeiphKFs = mpCurrentKeyFrame->GetBestCovisibilityKeyFrames(nn);
+    std::vector<std::pair<float, int>> vDepthIdx;
+    vDepthIdx.reserve(mpCurrentKeyFrame->N);
+    for (int i = 0; i < mpCurrentKeyFrame->N; ++i) {
+        float z = mpCurrentKeyFrame->mvDepth[i];
+        if(z > 0)
+            vDepthIdx.emplace_back(std::make_pair(z, i));
+    }
 
-    ORBmatcher matcher(0.6, false);
+    if(!vDepthIdx.empty()){
+        sort(vDepthIdx.begin(), vDepthIdx.end());
 
-    Eigen::Matrix4d Twc1 = mpCurrentKeyFrame->GetPose();
-    Eigen::Matrix3d Rwc1 = mpCurrentKeyFrame->GetRotation();
-    Eigen::Vector3d Ow1 = mpCurrentKeyFrame->GetCameraCenter();
+        int nPoints = 0;
+        for(auto& item : vDepthIdx){
+            int idx = item.second;
 
-    float fx1 = mpCurrentKeyFrame->fx;
-    float fy1 = mpCurrentKeyFrame->fy;
-    float cx1 = mpCurrentKeyFrame->cx;
-    float cy1 = mpCurrentKeyFrame->cy;
-    float invfx1 = mpCurrentKeyFrame->invfx;
-    float invfy1 = mpCurrentKeyFrame->invfy;
+            bool bCreateNew = false;
 
-    float ratioFactor = 1.5*mpCurrentKeyFrame->mfScaleFactor;
+            std::shared_ptr<MapPoint> pMP = mpCurrentKeyFrame->GetMapPoint(idx);
+            // 这里可以直接看该点是否是坏点
+            if(!pMP || pMP->isBad())
+                bCreateNew = true;
 
-    int nnew = 0;
+            if(bCreateNew){
+                Eigen::Vector3d x3D = mpCurrentKeyFrame->UnprojectStereo(idx);
+                std::shared_ptr<MapPoint> pNewMP = std::make_shared<MapPoint>(x3D, mpCurrentKeyFrame, mpMap);
+                pNewMP->AddObservation(mpCurrentKeyFrame, idx);
+                mpCurrentKeyFrame->AddMapPoint(pNewMP, idx);
+                pNewMP->ComputeDistinctiveDescriptors();
+                pNewMP->UpdateNormalAndDepth();
+                mpMap->AddMapPoint(pNewMP);
 
-    for(int i=0; i<vpNeiphKFs.size(); ++i){
-        // 这里的意思应该是共视关系最大的建立地图点后，如果又有新的关键帧就不需要再建立新的地图点
-        if(i>0 && CheckNewKeyFrames())
-            return;
-
-        std::shared_ptr<KeyFrame> pKF2 = vpNeiphKFs[i];
-
-        Eigen::Vector3d Ow2 = pKF2->GetCameraCenter();
-        Eigen::Vector3d vBaseline = Ow2-Ow1;
-        float baseline = vBaseline.norm();
-
-        if(baseline < pKF2->mb)
-            continue;
-
-        Eigen::Matrix3d F12 = ComputeF12(mpCurrentKeyFrame, pKF2);
-
-        std::vector<std::pair<size_t, size_t>> vMatchedIndices;
-        matcher.SearchForTriangulation(mpCurrentKeyFrame, pKF2, F12, vMatchedIndices);
+                mlpRecentAddedMapPoints.push_back(pNewMP);
+            }
+            nPoints++;
+            // TODO 这里增加多少个地图点合适
+            if(item.first > mpCurrentKeyFrame->mThDepth && nPoints > 100)
+                break;
+        }
     }
 }
 
+// 检查新添加的地图点
 Eigen::Matrix3d LocalMapping::ComputeF12(std::shared_ptr<KeyFrame> &pKF1, std::shared_ptr<KeyFrame> &pKF2) {
     Eigen::Matrix3d Rwkf1 = pKF1->GetRotation();
     Eigen::Matrix3d Rwkf2 = pKF2->GetRotation();
@@ -163,6 +189,112 @@ Eigen::Matrix3d LocalMapping::ComputeF12(std::shared_ptr<KeyFrame> &pKF1, std::s
     cv::cv2eigen(pKF2->mK, K2);
 
     return K1.transpose().inverse()*t12x*R12*K2.inverse();
+}
+
+void LocalMapping::SearchInNeighbors() {
+    int nn = 10;
+    std::vector<std::shared_ptr<KeyFrame>> vpNeighKFs = mpCurrentKeyFrame->GetBestCovisibilityKeyFrames(nn);
+    std::vector<std::shared_ptr<KeyFrame>> vpTargetKFs;
+
+    for(auto& pKFi : vpNeighKFs){
+        if(pKFi->isBad() || pKFi->mnFuseTargetForKF == mpCurrentKeyFrame->mnId)
+            continue;
+        vpTargetKFs.push_back(pKFi);
+        pKFi->mnFuseTargetForKF = mpCurrentKeyFrame->mnId;
+
+        std::vector<std::shared_ptr<KeyFrame>> vpSecondNeighKFs = pKFi->GetBestCovisibilityKeyFrames(5);
+        for(auto& pKFi2 : vpSecondNeighKFs){
+            if(pKFi2->isBad() || pKFi2->mnFuseTargetForKF == mpCurrentKeyFrame->mnId || pKFi2->mnId == mpCurrentKeyFrame->mnId)
+                continue;
+            vpTargetKFs.push_back(pKFi2);
+            pKFi2->mnFuseTargetForKF = mpCurrentKeyFrame->mnId;
+        }
+    }
+
+    // Search matches by projection from current KF in target KFs
+    ORBmatcher matcher;
+    std::vector<std::shared_ptr<MapPoint>> vpMapPointMatches = mpCurrentKeyFrame->GetMapPointMatches();
+    for(auto& pKFi : vpTargetKFs)
+        matcher.Fuse(pKFi, vpMapPointMatches);
+
+    // Search matches by projection from target KFs in current KF
+    std::vector<std::shared_ptr<MapPoint>> vpFuseCandidates;
+    vpFuseCandidates.reserve(vpTargetKFs.size()*vpMapPointMatches.size());
+    for(auto& pKFi : vpTargetKFs){
+        std::vector<std::shared_ptr<MapPoint>> vpMapPointsKFi = pKFi->GetMapPointMatches();
+        for(auto& pMP : vpMapPointsKFi){
+            if(!pMP)
+                continue;
+            if(pMP->isBad() || pMP->mnFuseCandidateForKF == mpCurrentKeyFrame->mnId)
+                continue;
+            pMP->mnFuseCandidateForKF = mpCurrentKeyFrame->mnId;
+            vpFuseCandidates.push_back(pMP);
+        }
+    }
+    matcher.Fuse(mpCurrentKeyFrame, vpFuseCandidates);
+
+    vpMapPointMatches = mpCurrentKeyFrame->GetMapPointMatches();
+    for(auto& pMP : vpMapPointMatches){
+        if(pMP){
+            if(!pMP->isBad()){
+                pMP->ComputeDistinctiveDescriptors();
+                pMP->UpdateNormalAndDepth();
+            }
+        }
+    }
+
+    mpCurrentKeyFrame->UpdateConnections();
+
+}
+
+void LocalMapping::KeyFrameCulling() {
+    std::vector<std::shared_ptr<KeyFrame>> vpLocalKeyFrames = mpCurrentKeyFrame->GetVectorCovisibleKeyFrames();
+
+    int thObs = 3;
+
+    for(auto& pKF : vpLocalKeyFrames){
+        if(pKF->mnId == 0)
+            continue;
+        std::vector<std::shared_ptr<MapPoint>> vpMapPoints = pKF->GetMapPointMatches();
+        int nRedundantObservations = 0;
+        int nMPs = 0;
+        for(int i=0; i<vpMapPoints.size(); ++i){
+            std::shared_ptr<MapPoint> pMP = vpMapPoints[i];
+            if(pMP){
+                if(!pMP->isBad()){
+                    if(!mbMonocular){
+                        if(pKF->mvDepth[i]<0 || pKF->mvDepth[i]>pKF->mThDepth)
+                            continue;
+                    }
+
+                    nMPs++;
+                    // 该帧的地图点的观察大于阈值，且尺度接近或更好的观察也大于阈值
+                    if(pMP->Observations()>thObs){
+                        int scaleLevel = pKF->mvKeysUn[i].octave;
+                        std::map<std::shared_ptr<KeyFrame>, size_t> obs = pMP->GetObservations();
+                        int nObs = 0;
+                        for(auto& ob : obs){
+                            std::shared_ptr<KeyFrame> pKFi = ob.first;
+                            if(pKFi == pKF)
+                                continue;
+                            int scaleLeveli = pKFi->mvKeysUn[ob.second].octave;
+
+                            if(scaleLeveli <= scaleLevel+1){
+                                nObs++;
+                                if(nObs>=thObs)
+                                    break;
+                            }
+                        }
+                        if(nObs >= thObs)
+                            nRedundantObservations++;
+                    }
+                }
+            }
+        }
+        // 剔除冗余关键帧
+        if(nRedundantObservations > 0.9*nMPs)
+            pKF->SetBadFlag();
+    }
 }
 
 bool LocalMapping::AcceptKeyFrames() {

@@ -12,6 +12,8 @@ class Optimizer{
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 
+    static void LocalBundleAdjustment(std::shared_ptr<KeyFrame> pKF, bool* pbStopFlag, std::shared_ptr<Map> pMap);
+
     static int PoseOptimization(std::shared_ptr<Frame> pFrame);
 
     static g2o::SE3Quat toSE3Quat(const Eigen::Matrix4d& pose);

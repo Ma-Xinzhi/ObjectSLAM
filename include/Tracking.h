@@ -21,7 +21,9 @@ public:
     void GrabPoseAndObjects(const g2o::SE3Quat& pose, const Observations& bbox, const cv::Mat& img_RGB);
     void GrabRGBDImageAndObjects(const cv::Mat& img_RGB, const cv::Mat& depth, std::shared_ptr<Observation> bbox);
 
-    Eigen::Matrix3d GetCalib() const { return mCalib; }
+    void SetLocalMapper(std::shared_ptr<LocalMapping> pLocalMapper) {mpLocalMapping = pLocalMapper;}
+
+    cv::Mat GetK() const { return mK; }
 
 private:
     void UpdateObjectObservation();
@@ -87,6 +89,8 @@ private:
     std::shared_ptr<Map> mpMap;
     std::shared_ptr<ORBextractor> mpORBextractor;
 
+    std::shared_ptr<LocalMapping> mpLocalMapping;
+
     // Motion Model
     Eigen::Matrix4d mVelocity; // T_last_current
     bool mbVelocity;
@@ -102,7 +106,6 @@ private:
 
     bool mbRGB;
 
-    Eigen::Matrix3d mCalib;
     cv::Mat mK;
     cv::Mat mDistCoef;
 

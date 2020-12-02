@@ -1,6 +1,8 @@
 #include "FrameDrawer.h"
 #include "Tracking.h"
 
+#include <opencv2/core/eigen.hpp>
+
 FrameDrawer::FrameDrawer(const std::shared_ptr<Map> &pmap): mpMap(pmap) {}
 
 cv::Mat FrameDrawer::DrawFrame() {
@@ -39,9 +41,11 @@ void FrameDrawer::DrawProjectionOnImage(cv::Mat& img) {
     for(const auto& quadric : quadrics){
         g2o::SE3Quat pose = mpCurrentFrame->GetPose();
         if(quadric->CheckObservability(pose)){
+            Eigen::Matrix3d Calib;
+            cv::cv2eigen(mK, Calib);
             // 两种方式求解投影的bounding box
-//            Eigen::Vector4d rect = quadric->ProjectOntoImageRectByEquation(pose, mCalib);
-            Vector5d ellipse = quadric->ProjectOntoImageEllipse(pose, mCalib);
+//            Eigen::Vector4d rect = quadric->ProjectOntoImageRectByEquation(pose, Calib);
+            Vector5d ellipse = quadric->ProjectOntoImageEllipse(pose, Calib);
             double angle = ellipse[4] * 180 / M_PI;
             // 这里的角度是度数单位，并且是顺时针旋转，计算的时候是按照逆时针旋转计算，需要取个反
             cv::ellipse(img, cv::Point(ellipse[0], ellipse[1]), cv::Size(ellipse[2], ellipse[3]),
@@ -52,10 +56,15 @@ void FrameDrawer::DrawProjectionOnImage(cv::Mat& img) {
     }
 }
 
-void FrameDrawer::Update(std::shared_ptr<Tracking> ptrack) {
+void FrameDrawer::Update(std::shared_ptr<Tracking> pTracker) {
     std::unique_lock<std::mutex> lk(mMutex);
-    ptrack->mCurImg.copyTo(mImg);
-    mpCurrentFrame = ptrack->mpCurrentFrame;
-    mvpObservation = ptrack->mpCurrentFrame->GetDetectionResults();
-    mCalib = ptrack->GetCalib();
+    pTracker->mCurImg.copyTo(mImg);
+
+    mpCurrentFrame = pTracker->mpCurrentFrame;
+    mvpObservation = mpCurrentFrame->GetDetectionResults();
+    mvCurrentKeys = mpCurrentFrame->mvKeys;
+    N = mvCurrentKeys.size();
+
+
+    mK = pTracker->GetK();
 }

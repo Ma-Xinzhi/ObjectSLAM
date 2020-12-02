@@ -12,7 +12,7 @@ class FrameDrawer{
 public:
     FrameDrawer(const std::shared_ptr<Map>& pmap);
 
-    void Update(std::shared_ptr<Tracking> ptrack);
+    void Update(std::shared_ptr<Tracking> pTracker);
 
     cv::Mat DrawFrame();
     // 显示检测框，投影椭圆和框
@@ -29,8 +29,17 @@ private:
     std::shared_ptr<Frame> mpCurrentFrame;
 
     cv::Mat mImg;
+    int N;
+    std::vector<cv::KeyPoint> mvCurrentKeys;
+    std::vector<bool> mvbMap, mvbVO;
+    bool mbOnlyTracking;
+    int mnTracked, mnTrackedVO;
+    std::vector<cv::KeyPoint> mvIniKeys;
+    std::vector<int> mvIniMatches;
+    int mState;
+
     Observations mvpObservation;
-    Eigen::Matrix3d mCalib;
+    cv::Mat mK;
 };
 
 #endif //OBJECTSLAM_FRAMEDRAWER_H

@@ -303,6 +303,8 @@ void Tracking::StereoInitialization() {
 
         LOG(INFO) << "New map created with " << mpMap->MapPointsInMap() << " points" << std::endl;
 
+        mpLocalMapping->InsertKeyFrame(pKFinit);
+
         mpLastFrame = mpCurrentFrame;
         mpLastKeyFrame = pKFinit;
         mnLastKeyFrameId = pKFinit->mnId;
@@ -575,6 +577,10 @@ void Tracking::SearchLocalPoints() {
 }
 
 bool Tracking::NeedNewKeyFrame() {
+
+    if(mpLocalMapping->isStopped() || mpLocalMapping->StopRequested())
+        return false;
+
     int nKFs = mpMap->KeyFramesInMap();
 
     if(mpCurrentFrame->mnId < mnLastRelocFrameId+mMaxFrames && nKFs > mMaxFrames)
@@ -584,6 +590,8 @@ bool Tracking::NeedNewKeyFrame() {
     if(nKFs <= 2)
         nMinObs = 2;
     int nRefMatches = mpReferenceKF->TrackedMapPoints(nMinObs);
+
+    bool bLocalMappingIdle = mpLocalMapping->AcceptKeyFrames();
 
     int nNonTrackedClose = 0;
     int nTrackedClose = 0;
@@ -609,63 +617,34 @@ bool Tracking::NeedNewKeyFrame() {
 
     bool c2 = (mnMatchesInliers < nRefMatches*thRefRatio || bNeedToInsertClose) && mnMatchesInliers > 15;
 
-    if((c1a||c1c) && c2)
-        return true;
+    if((c1a||c1c) && c2){
+        if(bLocalMappingIdle)
+            return true;
+        else{
+            mpLocalMapping->InterruptBA();
+            if(mpLocalMapping->KeyframesInQueue()<3)
+                return true;
+            else
+                return false;
+        }
+    }
     else
         return false;
 }
 
 void Tracking::CreateNewKeyFrame()
 {
+    if(!mpLocalMapping->SetNotStop(true))
+        return;
+
     std::shared_ptr<KeyFrame> pKF = std::make_shared<KeyFrame>(mpCurrentFrame, mpMap);
 
     mpReferenceKF = pKF;
     mpCurrentFrame->mpReferenceKF = pKF;
 
-    std::vector<std::pair<float, int>> vDepthIdx;
-    vDepthIdx.reserve(mpCurrentFrame->N);
-    for (int i = 0; i < mpCurrentFrame->N; ++i) {
-        float z = mpCurrentFrame->mvDepth[i];
-        if(z > 0)
-            vDepthIdx.emplace_back(std::make_pair(z, i));
-    }
+    mpLocalMapping->InsertKeyFrame(pKF);
 
-    if(!vDepthIdx.empty()){
-        sort(vDepthIdx.begin(), vDepthIdx.end());
-
-        int nPoints = 0;
-        for(auto& item : vDepthIdx){
-            int idx = item.second;
-
-            bool bCreateNew = false;
-
-            std::shared_ptr<MapPoint> pMP = mpCurrentFrame->mvpMapPoints[idx];
-            if(!pMP)
-                bCreateNew = true;
-            // 这里可以直接看该点是否是坏点
-            else if(pMP->isBad()){
-                bCreateNew = true;
-                mpCurrentFrame->mvpMapPoints[idx] = nullptr;
-            }
-
-            if(bCreateNew){
-                Eigen::Vector3d x3D = mpCurrentFrame->UnprojectStereo(idx);
-                std::shared_ptr<MapPoint> pNewMP = std::make_shared<MapPoint>(x3D, pKF, mpMap);
-                pNewMP->AddObservation(pKF, idx);
-                pKF->AddMapPoint(pNewMP, idx);
-                pNewMP->ComputeDistinctiveDescriptors();
-                pNewMP->UpdateNormalAndDepth();
-                mpMap->AddMapPoint(pNewMP);
-
-                mpCurrentFrame->mvpMapPoints[idx] = pNewMP;
-            }
-            nPoints++;
-            if(item.first > mThDepth && nPoints > 100)
-                break;
-        }
-    }
-
-//    mpLocalMapper->InsertKeyFrame(pKF);
+    mpLocalMapping->SetNotStop(false);
 
     mnLastKeyFrameId = mpCurrentFrame->mnId;
     mpLastKeyFrame = pKF;
