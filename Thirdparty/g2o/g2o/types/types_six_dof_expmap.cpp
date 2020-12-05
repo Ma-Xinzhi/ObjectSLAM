@@ -69,51 +69,6 @@ bool VertexSE3Expmap::write(std::ostream& os) const {
   return os.good();
 }
 
-bool EdgeSE3Expmap::read(std::istream& is)  {
-  Vector7d meas;
-  for (int i=0; i<7; i++)
-    is >> meas[i];
-  SE3Quat cam2world;
-  cam2world.fromVector(meas);
-  setMeasurement(cam2world.inverse());
-  //TODO: Convert information matrix!!
-  for (int i=0; i<6; i++)
-    for (int j=i; j<6; j++) {
-      is >> information()(i,j);
-      if (i!=j)
-        information()(j,i)=information()(i,j);
-    }
-  return true;
-}
-
-bool EdgeSE3Expmap::write(std::ostream& os) const {
-  SE3Quat cam2world(measurement().inverse());
-  for (int i=0; i<7; i++)
-    os << cam2world[i] << " ";
-  for (int i=0; i<6; i++)
-    for (int j=i; j<6; j++){
-      os << " " <<  information()(i,j);
-    }
-  return os.good();
-}
-
-
-// void EdgeSE3Expmap::linearizeOplus() {
-//   VertexSE3Expmap * vi = static_cast<VertexSE3Expmap *>(_vertices[0]);
-//   SE3Quat Ti(vi->estimate());
-// 
-//   VertexSE3Expmap * vj = static_cast<VertexSE3Expmap *>(_vertices[1]);
-//   SE3Quat Tj(vj->estimate());
-// 
-//   const SE3Quat & Tij = _measurement;
-//   SE3Quat invTij = Tij.inverse();
-// 
-//   SE3Quat invTj_Tij = Tj.inverse()*Tij;
-//   SE3Quat infTi_invTij = Ti.inverse()*invTij;
-// 
-//   _jacobianOplusXi = invTj_Tij.adj();
-//   _jacobianOplusXj = -infTi_invTij.adj();
-// }
 
 EdgeSE3ProjectXYZ::EdgeSE3ProjectXYZ() : BaseBinaryEdge<2, Vector2d, VertexSBAPointXYZ, VertexSE3Expmap>() {
 }

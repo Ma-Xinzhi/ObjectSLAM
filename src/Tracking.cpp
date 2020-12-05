@@ -15,10 +15,14 @@ Tracking::Tracking(const std::string &strSettingPath, std::shared_ptr<Map> pMap,
     double fy = fSettings["Camera.fy"];
     double cx = fSettings["Camera.cx"];
     double cy = fSettings["Camera.cy"];
-    mCalib << fx, 0, cx,
-              0, fy, cy,
-              0, 0, 1;
-    cv::eigen2cv(mCalib, mK);
+
+    cv::Mat K = cv::Mat::eye(3,3,CV_32F);
+    K.at<float>(0,0) = fx;
+    K.at<float>(1,1) = fy;
+    K.at<float>(0,2) = cx;
+    K.at<float>(1,2) = cy;
+    K.copyTo(mK);
+
     cv::Mat DistCoef(4,1,CV_32F);
     DistCoef.at<float>(0) = fSettings["Camera.k1"];
     DistCoef.at<float>(1) = fSettings["Camera.k2"];
@@ -84,25 +88,23 @@ void Tracking::GrabPoseAndSingleObject(const g2o::SE3Quat &pose, std::shared_ptr
     // 这里主要的问题是该创建的Frame对象的shared_ptr并未存储在map类中，造成删除
     mpCurrentFrame = std::make_shared<Frame>(pose, bbox, img_RGB);
 
-    mpFrameDrawer->Update(std::shared_ptr<Tracking>(this));
+    mpFrameDrawer->Update(this);
     // TODO 这里先简单将位姿结果作为已知，直接进行赋值，后续需要跟踪图像求解位姿
-    mpMapDrawer->SetCurrentCameraPose(pose);
+    mpMapDrawer->SetCurrentCameraPose(pose.to_homogeneous_matrix());
 
     // TODO 增加关键帧的判断，先简单处理为全部是关键帧
-    if(NeedNewKeyFrame()){
-        mpCurrentFrame->SetKeyFrame();
-        mpMap->AddKeyFrame(mpCurrentFrame);
-        UpdateObjectObservation();
-        CheckInitialization();
-    }
+//    if(NeedNewKeyFrame()){
+//        mpMap->AddKeyFrame(mpCurrentFrame);
+//        UpdateObjectObservation();
+//        CheckInitialization();
+//    }
 }
 
 void Tracking::GrabPoseAndObjects(const g2o::SE3Quat &pose, const Observations &bbox, const cv::Mat &img_RGB) {
 
 }
 
-void Tracking::GrabRGBDImageAndObjects(const cv::Mat &img_RGB, const cv::Mat &depth,
-                                         std::shared_ptr<Observation> bbox) {
+void Tracking::GrabRGBDImage(const cv::Mat &img_RGB, const cv::Mat &depth, double timestamp) {
     mCurImg = img_RGB;
     cv::Mat imDepth = depth;
     if(mCurImg.channels()==3){
@@ -121,7 +123,7 @@ void Tracking::GrabRGBDImageAndObjects(const cv::Mat &img_RGB, const cv::Mat &de
     if(fabs(mDepthMapFactor-1.0f)>1e-5 || imDepth.type()!=CV_32F)
         imDepth.convertTo(imDepth, CV_32F, mDepthMapFactor);
 
-    mpCurrentFrame = std::make_shared<Frame>(mGrayImg, imDepth, mpORBextractor, mK, mDistCoef, mbf, mThDepth);
+    mpCurrentFrame = std::make_shared<Frame>(mGrayImg, imDepth, timestamp, mpORBextractor, mK, mDistCoef, mbf, mThDepth);
 
     Track();
 }
@@ -138,14 +140,18 @@ void Tracking::Track() {
     if(mState == NOT_INITIALIZED){
         StereoInitialization();
         // TODO 这里需要进行物体检测,再update viewer
-        mpFrameDrawer->Update(std::shared_ptr<Tracking>(this));
+        mpFrameDrawer->Update(this);
+        if(mpLastFrame){
+            mbVelocity = true;
+            mVelocity = Eigen::Matrix4d::Identity();
+        }
         if(mState != OK)
             return;
     }
     else{
         bool bOK = false;
         if(mState == OK){
-            // TODO 这里是Local Mapping可能会改变一些地图点，需要斟酌一下
+            /// 这里是因为Local Mapping中可能会融合一些地图点
             CheckReplacedInLastFrame();
             // TODO 这里跟踪参考关键帧考虑采用光流法跟踪，作为一个粗略估计
 //            if(!mbVelocity || mpCurrentFrame->mnId < mnLastRelocFrameId+2)
@@ -173,7 +179,7 @@ void Tracking::Track() {
             bOK = TrackLocalMap();
 
         // Update drawer
-        mpFrameDrawer->Update(std::shared_ptr<Tracking>(this));
+        mpFrameDrawer->Update(this);
 
         // If tracking were good, check if we insert a keyframe
         if(bOK){
@@ -234,7 +240,7 @@ void Tracking::UpdateObjectObservation() {
         if(!calibrateMeasurement(measurement, mImgHeight, mImgWidth, config_border, config_size)){
             obs.erase(iter);
         }else{
-            (*iter)->mpKeyFrame = mpCurrentFrame;
+//            (*iter)->mpKeyFrame = mpCurrentFrame;
             mpMap->AddObservation(*iter);
             iter++;
         }
@@ -260,7 +266,11 @@ void Tracking::CheckInitialization() {
             if(frame_num < config_minimum_initialization_frame)
                 continue;
             LOG(INFO) << "Frame number: " << frame_num << std::endl;
-            std::shared_ptr<g2o::Quadric> Q_ptr = mpInitailizeQuadric->BuildQuadric(obs, mCalib);
+
+            Eigen::Matrix3d calib;
+            cv::cv2eigen(mK, calib);
+            std::shared_ptr<g2o::Quadric> Q_ptr = mpInitailizeQuadric->BuildQuadric(obs, calib);
+
             if(mpInitailizeQuadric->GetResult()){
                 Q_ptr->SetObservation(obs);
                 for(auto& ob : obs)
@@ -358,7 +368,7 @@ bool Tracking::TrackReferenceKeyFrame() {
 bool Tracking::TrackWithMotionModel() {
     ORBmatcher matcher(0.9, true);
     // TODO 这里的意思应该是关键帧的位姿会进行优化，所以存储相对位姿，再根据优化更新上一帧的位姿，先省略
-//    UpdateLastFrame();
+    UpdateLastFrame();
     mpCurrentFrame->SetPose(mpLastFrame->GetPose()*mVelocity);
     // 这里似乎没有必要
     std::fill(mpCurrentFrame->mvpMapPoints.begin(), mpCurrentFrame->mvpMapPoints.end(), nullptr);
@@ -392,6 +402,7 @@ bool Tracking::TrackWithMotionModel() {
                 nmatchesMap++;
         }
     }
+    LOG(INFO) << "Track " << nmatchesMap << " points from last frame" << std::endl;
     return nmatchesMap >= 10;
 }
 
@@ -403,10 +414,11 @@ void Tracking::UpdateLastFrame() {
 }
 
 bool Tracking::TrackLocalMap() {
+    // 更新当前帧的局部地图信息
     UpdateLocalMap();
-
+    // 搜索局部地图点，能否找到相关联的特征点
     SearchLocalPoints();
-
+    // 根据相关联地图点进行优化
     Optimizer::PoseOptimization(mpCurrentFrame);
 
     mnMatchesInliers = 0;
@@ -423,6 +435,8 @@ bool Tracking::TrackLocalMap() {
         }
     }
 
+    LOG(INFO) << "Track " << mnMatchesInliers << " points in the local map" << std::endl;
+
     if(mnMatchesInliers < 30)
         return false;
     else
@@ -437,6 +451,7 @@ void Tracking::UpdateLocalMap() {
     UpdateLocalPoints();
 }
 
+// 更新局部的关键帧，找出与当前帧有共视关系的关键帧，以及与关键帧有共视关系的关键帧
 void Tracking::UpdateLocalKeyFrames() {
     std::map<std::shared_ptr<KeyFrame>, int> kfCounter;
     for(int i=0; i<mpCurrentFrame->N; ++i){
@@ -589,6 +604,7 @@ bool Tracking::NeedNewKeyFrame() {
     int nMinObs = 3;
     if(nKFs <= 2)
         nMinObs = 2;
+    // 参考关键帧跟踪到观察次数多的点的匹配个数
     int nRefMatches = mpReferenceKF->TrackedMapPoints(nMinObs);
 
     bool bLocalMappingIdle = mpLocalMapping->AcceptKeyFrames();
@@ -604,7 +620,7 @@ bool Tracking::NeedNewKeyFrame() {
                 nNonTrackedClose++;
         }
     }
-
+    // 跟踪成功和丢失的比例
     bool bNeedToInsertClose = nTrackedClose < 100 && nNonTrackedClose > 70;
 
     float thRefRatio = 0.75;
@@ -612,7 +628,7 @@ bool Tracking::NeedNewKeyFrame() {
         thRefRatio = 0.4;
 
     bool c1a = mpCurrentFrame->mnId >= mnLastKeyFrameId+mMaxFrames;
-//    bool c1b = mpCurrentFrame->mnId >= mnLastKeyFrameId + mMinFrames && bLocalMappingIdle;
+    bool c1b = mpCurrentFrame->mnId >= mnLastKeyFrameId + mMinFrames && bLocalMappingIdle;
     bool c1c = mnMatchesInliers < nRefMatches*0.25 || bNeedToInsertClose;
 
     bool c2 = (mnMatchesInliers < nRefMatches*thRefRatio || bNeedToInsertClose) && mnMatchesInliers > 15;

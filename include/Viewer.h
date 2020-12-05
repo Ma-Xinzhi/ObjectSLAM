@@ -18,7 +18,12 @@ public:
     void Run();
 
     void RequestFinish();
+    void RequestStop();
+
     bool IsFinished();
+    bool IsStopped();
+
+    void Release();
 
 private:
     std::shared_ptr<MapDrawer> mpMapDrawer;
@@ -28,10 +33,16 @@ private:
     void SetFinish();
     bool mbFinishRequested;
     bool mbFinished;
-
     std::mutex mMutexFinish;
+
+    bool Stop();
+    bool mbStopped;
+    bool mbStopRequested;
+    std::mutex mMutexStop;
+
     std::thread mthread;
 
+    double mT;
     int mImgHeight;
     int mImgWidth;
 

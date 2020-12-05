@@ -11,10 +11,11 @@
 
 class Map;
 
-class MapPoint{
+class MapPoint: public std::enable_shared_from_this<MapPoint>
+{
 public:
-    MapPoint(const Eigen::Vector3d& Pos, std::shared_ptr<KeyFrame> pRefKF, std::shared_ptr<Map> pMap);
-    MapPoint(const Eigen::Vector3d& Pos, std::shared_ptr<Map> pMap, std::shared_ptr<Frame> pFrame, const int& idxF);
+    MapPoint(const Eigen::Vector3d& Pos, const std::shared_ptr<KeyFrame>& pRefKF, const std::shared_ptr<Map>& pMap);
+    MapPoint(const Eigen::Vector3d& Pos, const std::shared_ptr<Map>& pMap, const std::shared_ptr<Frame>& pFrame, const int& idxF);
 
     void SetWorldPos(const Eigen::Vector3d& Pos);
     Eigen::Vector3d GetWorldPos();
@@ -25,16 +26,16 @@ public:
     std::map<std::shared_ptr<KeyFrame>,size_t> GetObservations();
     int Observations();
 
-    void AddObservation(std::shared_ptr<KeyFrame> pKF,size_t idx);
-    void EraseObservation(std::shared_ptr<KeyFrame> pKF);
+    void AddObservation(const std::shared_ptr<KeyFrame>& pKF,size_t idx);
+    void EraseObservation(const std::shared_ptr<KeyFrame>& pKF);
 
-    int GetIndexInKeyFrame(std::shared_ptr<KeyFrame> pKF);
-    bool IsInKeyFrame(std::shared_ptr<KeyFrame> pKF);
+    int GetIndexInKeyFrame(const std::shared_ptr<KeyFrame>& pKF);
+    bool IsInKeyFrame(const std::shared_ptr<KeyFrame>& pKF);
 
     void SetBadFlag();
     bool isBad();
 
-    void Replace(std::shared_ptr<MapPoint> pMP);
+    void Replace(const std::shared_ptr<MapPoint>& pMP);
     std::shared_ptr<MapPoint> GetReplaced();
 
     void IncreaseVisible(int n=1);
@@ -52,8 +53,8 @@ public:
 
     float GetMinDistanceInvariance();
     float GetMaxDistanceInvariance();
-    int PredictScale(const float &currentDist, std::shared_ptr<KeyFrame> pKF);
-    int PredictScale(const float &currentDist, std::shared_ptr<Frame> pF);
+    int PredictScale(const float &currentDist, const KeyFrame* pKF);
+    int PredictScale(const float &currentDist, const Frame* pF);
 
 public:
     long unsigned int mnId;

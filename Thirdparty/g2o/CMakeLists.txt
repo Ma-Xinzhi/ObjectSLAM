@@ -1,5 +1,4 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
-set(CMAKE_CXX_FLAGS "-std=c++11 ${CMAKE_CXX_FLAGS}")  # add by me. synced with flags in my cmakelist.txt
 SET(CMAKE_LEGACY_CYGWIN_WIN32 0)
 
 PROJECT(g2o)
@@ -43,10 +42,6 @@ IF(UNIX)
   MESSAGE(STATUS "Compiling on Unix")
 ENDIF(UNIX)
 
-# For building the CHOLMOD / CSPARSE solvers
-FIND_PACKAGE(BLAS REQUIRED)
-FIND_PACKAGE(LAPACK REQUIRED)
-
 # Eigen library parallelise itself, though, presumably due to performance issues
 # OPENMP is experimental. We experienced some slowdown with it
 FIND_PACKAGE(OpenMP)
@@ -58,17 +53,17 @@ IF(OPENMP_FOUND AND G2O_USE_OPENMP)
   MESSAGE(STATUS "Compiling with OpenMP support")
 ENDIF(OPENMP_FOUND AND G2O_USE_OPENMP)
 
-# Compiler specific options for gcc   #comment by me
-#SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -march=native") 
-#SET(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3 -march=native") 
+# Compiler specific options for gcc
+SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
+SET(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3")
 
 # activate warnings !!!
-#SET(g2o_C_FLAGS "${g2o_C_FLAGS} -Wall -W")
-#SET(g2o_CXX_FLAGS "${g2o_CXX_FLAGS} -Wall -W")
+SET(g2o_C_FLAGS "${g2o_C_FLAGS} -Wall -W")
+SET(g2o_CXX_FLAGS "${g2o_CXX_FLAGS} -Wall -W")
 
 # specifying compiler flags
-#SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${g2o_CXX_FLAGS}")
-#SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${g2o_C_FLAGS}")
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${g2o_CXX_FLAGS}")
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${g2o_C_FLAGS}")
 
 # Find Eigen3
 SET(EIGEN3_INCLUDE_DIR ${G2O_EIGEN3_INCLUDE})
@@ -94,11 +89,11 @@ ${G2O_EIGEN3_INCLUDE})
 ADD_LIBRARY(g2o ${G2O_LIB_TYPE}
 #types
 g2o/types/types_sba.h
-g2o/types/types_sba.cpp
 g2o/types/types_six_dof_expmap.h
+g2o/types/types_sba.cpp
 g2o/types/types_six_dof_expmap.cpp
-g2o/types/types_seven_dof_expmap.h
 g2o/types/types_seven_dof_expmap.cpp
+g2o/types/types_seven_dof_expmap.h
 g2o/types/se3quat.h
 g2o/types/se3_ops.h
 g2o/types/se3_ops.hpp
@@ -108,8 +103,7 @@ g2o/core/base_binary_edge.h
 g2o/core/hyper_graph_action.cpp
 g2o/core/base_binary_edge.hpp
 g2o/core/hyper_graph_action.h
-g2o/core/base_multi_edge.h  
-g2o/core/eigen_types.h         
+g2o/core/base_multi_edge.h           
 g2o/core/hyper_graph.cpp
 g2o/core/base_multi_edge.hpp         
 g2o/core/hyper_graph.h

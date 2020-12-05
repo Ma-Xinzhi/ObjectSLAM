@@ -4,41 +4,41 @@
 
 Map::Map(): mnMaxKFId(0) {}
 
-void Map::AddKeyFrame(std::shared_ptr<KeyFrame> pKF) {
+void Map::AddKeyFrame(const std::shared_ptr<KeyFrame>& pKF) {
     std::unique_lock<std::mutex> lk(mMutexMap);
     mspKeyFrames.insert(pKF);
     if(pKF->mnId > mnMaxKFId)
         mnMaxKFId = pKF->mnId;
 }
 
-void Map::AddMapPoint(std::shared_ptr<MapPoint> pMp) {
+void Map::AddMapPoint(const std::shared_ptr<MapPoint>& pMp) {
     std::unique_lock<std::mutex> lk(mMutexMap);
     mspMapPoints.insert(pMp);
 }
 
-void Map::AddObservation(std::shared_ptr<Observation> pob) {
+void Map::AddObservation(const std::shared_ptr<Observation>& pOb) {
     //　TODO 先按一个物体最简单的方式来处理，考虑数据关联的问题
-    int label = pob->mLabel;
+    int label = pOb->mLabel;
     if(mmObjectObservation.find(label) != mmObjectObservation.end()){
-        mmObjectObservation[label].push_back(pob);
+        mmObjectObservation[label].push_back(pOb);
     } else{
         Observations obs;
-        obs.push_back(pob);
+        obs.push_back(pOb);
         mmObjectObservation.insert(std::make_pair(label, obs));
     }
 }
 
-void Map::AddQuadric(std::shared_ptr<g2o::Quadric> pQuadric) {
+void Map::AddQuadric(const std::shared_ptr<g2o::Quadric>& pQuadric) {
     std::unique_lock<std::mutex> lk(mMutexMap);
     mvpQuadric.push_back(pQuadric);
 }
 
-void Map::EraseKeyFrame(std::shared_ptr<KeyFrame> pKF) {
+void Map::EraseKeyFrame(const std::shared_ptr<KeyFrame>& pKF) {
     std::unique_lock<std::mutex> lk(mMutexMap);
     mspKeyFrames.erase(pKF);
 }
 
-void Map::EraseMapPoint(std::shared_ptr<MapPoint> pMp) {
+void Map::EraseMapPoint(const std::shared_ptr<MapPoint>& pMp) {
     std::unique_lock<std::mutex> lk(mMutexMap);
     mspMapPoints.erase(pMp);
 }

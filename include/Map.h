@@ -15,21 +15,21 @@
 class Map{
 public:
     Map();
-    void AddQuadric(std::shared_ptr<g2o::Quadric> pQuadric);
+    void AddQuadric(const std::shared_ptr<g2o::Quadric>& pQuadric);
     std::vector<std::shared_ptr<g2o::Quadric>> GetAllQuadric();
 
-    void AddKeyFrame(std::shared_ptr<KeyFrame> pKF);
-    void EraseKeyFrame(std::shared_ptr<KeyFrame> pKF);
+    void AddKeyFrame(const std::shared_ptr<KeyFrame>& pKF);
+    void EraseKeyFrame(const std::shared_ptr<KeyFrame>& pKF);
     std::vector<std::shared_ptr<KeyFrame>> GetAllKeyFrame();
 
-    void AddMapPoint(std::shared_ptr<MapPoint> pMp);
-    void EraseMapPoint(std::shared_ptr<MapPoint> pMp);
+    void AddMapPoint(const std::shared_ptr<MapPoint>& pMp);
+    void EraseMapPoint(const std::shared_ptr<MapPoint>& pMp);
     std::vector<std::shared_ptr<MapPoint>> GetAllMapPoints();
 
     void SetReferenceMapPoints(const std::vector<std::shared_ptr<MapPoint>>& vpMPs);
     std::vector<std::shared_ptr<MapPoint>> GetReferenceMapPoints();
 
-    void AddObservation(std::shared_ptr<Observation> pobservation);
+    void AddObservation(const std::shared_ptr<Observation>& pOb);
     bool EraseObservation(int label);
     std::map<int, Observations> GetAllObservation() const { return mmObjectObservation; };
 

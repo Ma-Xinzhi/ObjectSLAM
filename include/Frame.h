@@ -24,9 +24,9 @@ public:
     Frame(const g2o::SE3Quat& pose, const std::vector<std::shared_ptr<Observation>>& bbox, const cv::Mat& image);
 
     void ExtractORB(const cv::Mat &img);
-    std::vector<size_t> GetFeaturesInArea(float x, float y, float r, const int minLevel=-1, const int maxLevel=-1) const;
+    std::vector<size_t> GetFeaturesInArea(float x, float y, float r, int minLevel=-1, int maxLevel=-1) const;
 
-    bool isInFrustum(std::shared_ptr<MapPoint> pMP, float viewingCosLimit);
+    bool isInFrustum(const std::shared_ptr<MapPoint>& pMP, float viewingCosLimit);
 
     Eigen::Vector3d UnprojectStereo(int i);
 
@@ -37,9 +37,9 @@ public:
     void SetPose(const Eigen::Matrix4d& pose_wc);
 //    g2o::SE3Quat GetPose() const { return mTwc_se3; }
     Eigen::Matrix4d GetPose() const { return mTwc; }
-    Eigen::Vector3d GetCameraCenter() const { return mtwc; }
     Eigen::Matrix3d GetRotation() const { return mRwc; }
-    Eigen::Matrix3d GetTranslation() const { return mRwc; }
+    Eigen::Vector3d GetTranslation() const { return mtwc; }
+    Eigen::Vector3d GetCameraCenter() const { return mtwc; }
 
     cv::Mat GetImg() const { return mFrameImg; }
 

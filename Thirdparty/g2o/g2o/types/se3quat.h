@@ -62,13 +62,7 @@ namespace g2o {
       SE3Quat(const Quaterniond& q, const Vector3d& t):_r(q),_t(t){
         normalizeRotation();
       }
-      
-      // x y z qx qy qz qw
-      SE3Quat(const Vector7d& v){
-	   fromVector(v);
-	   normalizeRotation();
-      }
-      
+
       /**
        * templaized constructor which allows v to be an arbitrary Eigen Vector type, e.g., Vector6d or Map<Vector6d>
        */
@@ -140,7 +134,7 @@ namespace g2o {
         return _r.coeffs()[i-3];
       }
 
-      // x y z qx qy qz qw
+
       inline Vector7d toVector() const{
         Vector7d v;
         v[0]=_t(0);
@@ -153,12 +147,11 @@ namespace g2o {
         return v;
       }
 
-      // x y z qx qy qz qw
       inline void fromVector(const Vector7d& v){
         _r=Quaterniond(v[6], v[3], v[4], v[5]);
         _t=Vector3d(v[0], v[1], v[2]);
       }
-      // x y z qx qy qz
+
       inline Vector6d toMinimalVector() const{
         Vector6d v;
         v[0]=_t(0);
@@ -169,7 +162,7 @@ namespace g2o {
         v[5]=_r.z();
         return v;
       }
-      // x y z qx qy qz
+
       inline void fromMinimalVector(const Vector6d& v){
         double w = 1.-v[3]*v[3]-v[4]*v[4]-v[5]*v[5];
         if (w>0){
@@ -178,54 +171,10 @@ namespace g2o {
           _r=Quaterniond(0, -v[3], -v[4], -v[5]);
         }
         _t=Vector3d(v[0], v[1], v[2]);
-      }      
-      
-      // copied from my quat to euler
-      void quat_to_euler_zyx_infuc(const Eigen::Quaterniond q, double& roll, double& pitch, double& yaw) const
-      {
-	    const double qw = q.w();
-	    const double qx = q.x();
-	    const double qy = q.y();
-	    const double qz = q.z();
-	    
-	    roll = atan2(2*(qw*qx+qy*qz), 1-2*(qx*qx+qy*qy));
-	    pitch = asin(2*(qw*qy-qz*qx));
-	    yaw = atan2(2*(qw*qz+qx*qy), 1-2*(qy*qy+qz*qz));
-      }
-      
-      inline Vector6d toXYZPRYVector() const{
-	    double yaw, pitch, roll;
-	    quat_to_euler_zyx_infuc(_r, roll, pitch, yaw);
-        Vector6d v;
-        v[0]=_t(0);
-        v[1]=_t(1);
-        v[2]=_t(2);
-        v[3]=roll;
-        v[4]=pitch;
-        v[5]=yaw;
-        return v;
-      }
-            
-      Eigen::Quaterniond zyx_euler_to_quat(const double &roll, const double &pitch, const double &yaw)
-      {
-	    double sy = sin(yaw*0.5);
-	    double cy = cos(yaw*0.5);
-	    double sp = sin(pitch*0.5);
-	    double cp = cos(pitch*0.5);
-	    double sr = sin(roll*0.5);
-	    double cr = cos(roll*0.5);
-	    double w = cr*cp*cy + sr*sp*sy;
-	    double x = sr*cp*cy - cr*sp*sy;
-	    double y = cr*sp*cy + sr*cp*sy;
-	    double z = cr*cp*sy - sr*sp*cy;
-	    return Eigen::Quaterniond(w,x,y,z);
-      }
-      inline void fromXYZPRYVector(const Vector6d& v){
-	_r = zyx_euler_to_quat(v[3], v[4], v[5]);
-	_t=Vector3d(v[0], v[1], v[2]);
       }
 
-      
+
+
       Vector6d log() const {
         Vector6d res;
         Matrix3d _R = _r.toRotationMatrix();
@@ -233,13 +182,13 @@ namespace g2o {
         Vector3d omega;
         Vector3d upsilon;
 
-	
+
         Vector3d dR = deltaR(_R);
         Matrix3d V_inv;
 
         if (d>0.99999)
         {
-	  
+
           omega=0.5*dR;
           Matrix3d Omega = skew(omega);
           V_inv = Matrix3d::Identity()- 0.5*Omega + (1./12.)*(Omega*Omega);
@@ -269,9 +218,9 @@ namespace g2o {
       {
         return _r*xyz + _t;
       }
-      
-      //  angle, translation
-      static SE3Quat exp(const Vector6d & update)  // doesn't multiply into current...
+
+
+      static SE3Quat exp(const Vector6d & update)
       {
         Vector3d omega;
         for (int i=0; i<3; i++)
@@ -285,18 +234,11 @@ namespace g2o {
 
         Matrix3d R;
         Matrix3d V;
-	Quaterniond q;
-
         if (theta<0.00001)
         {
           //TODO: CHECK WHETHER THIS IS CORRECT!!!
-          R = (Matrix3d::Identity() + Omega + Omega*Omega);// must add Omega... though it is small
-	  
-// 	  double theta_sq=theta*theta;double theta_po4=theta_sq*theta_sq; // from LSD sophus
-// 	  q.w() = 1-0.5*theta_sq + (1.0/384.0)*theta_po4; 
-// 	  q.vec() = (0.5-1.0/48.0*theta_sq + 1.0/3840.0*theta_po4)*omega;
-// 	  q.normalize();
-	  
+          R = (Matrix3d::Identity() + Omega + Omega*Omega);
+
           V = R;
         }
         else
@@ -306,19 +248,12 @@ namespace g2o {
           R = (Matrix3d::Identity()
               + sin(theta)/theta *Omega
               + (1-cos(theta))/(theta*theta)*Omega2);
-	  
-// 	  q.vec() = omega/theta*sin(theta/2); // from LSD sophus
-// 	  q.w() = cos(theta/2);
-// 	  q.normalize();
-	  
+
           V = (Matrix3d::Identity()
               + (1-cos(theta))/(theta*theta)*Omega
               + (theta-sin(theta))/(pow(theta,3))*Omega2);
         }
-//         if (q.w()<1)
-// 	    std::cout<<"Quaterniond(R) "<<Quaterniond(R).coeffs().transpose()<<"  "<<q.coeffs().transpose()<<std::endl;
-//         return SE3Quat(q,V*upsilon);
-	  return SE3Quat(Quaterniond(R),V*upsilon);
+        return SE3Quat(Quaterniond(R),V*upsilon);
       }
 
       Matrix<double, 6, 6> adj() const

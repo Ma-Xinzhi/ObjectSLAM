@@ -8,7 +8,8 @@ std::shared_ptr<g2o::Quadric> InitializeQuadric::BuildQuadric(const Observations
     std::vector<g2o::SE3Quat> poses;
     std::vector<Eigen::VectorXd> detections;
     for(const auto& ob : obs){
-        g2o::SE3Quat pose = ob->mpFrame.lock()->GetPose();
+        Eigen::Matrix4d Twc = ob->mpKeyFrame.lock()->GetPose();
+        g2o::SE3Quat pose(Twc.block(0,0,3,3), Twc.col(3).head(3));
         Eigen::VectorXd detection;
         detection.resize(6);
         detection << ob->mBbox, ob->mLabel, ob->mProb;

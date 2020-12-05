@@ -57,13 +57,19 @@ void LocalMapping::Run() {
     SetFinish();
 }
 
+void LocalMapping::InsertKeyFrame(std::shared_ptr<KeyFrame> pKF) {
+    std::unique_lock<std::mutex> lk(mMutexNewKFs);
+    mlNewKeyFrames.push_back(pKF);
+    mbAbortBA = true;
+}
+
 void LocalMapping::SetAcceptKeyFrames(bool flag) {
-    std::unique_lock<std::mutex> lk(mMutexAccept);
+    std::unique_lock<std::mutex> lk(mMutexNewKFs);
     mbAcceptKeyFrames = flag;
 }
 
 bool LocalMapping::CheckNewKeyFrames() {
-    std::unique_lock<std::mutex> lk(mMutexAccept);
+    std::unique_lock<std::mutex> lk(mMutexNewKFs);
     return !mlNewKeyFrames.empty();
 }
 
@@ -120,7 +126,7 @@ void LocalMapping::MapPointCulling() {
             pMP->SetBadFlag();
             lit = mlpRecentAddedMapPoints.erase(lit);
         }
-            // 如果当前帧相较于地图点创建时的关键帧太远，舍弃该点
+            // 如果当前帧相较于地图点创建时的关键帧太远，将该点删去，不作为后续剔除对象
         else if(nCurrentKFid-pMP->mnFirstKFid >= 3)
             lit = mlpRecentAddedMapPoints.erase(lit);
         else
@@ -149,8 +155,12 @@ void LocalMapping::CreateNewMapPoints() {
 
             std::shared_ptr<MapPoint> pMP = mpCurrentKeyFrame->GetMapPoint(idx);
             // 这里可以直接看该点是否是坏点
-            if(!pMP || pMP->isBad())
+            if(!pMP)
                 bCreateNew = true;
+            else if(pMP->isBad()){
+                bCreateNew = true;
+                mpCurrentKeyFrame->EraseMapPointMatch(idx);
+            }
 
             if(bCreateNew){
                 Eigen::Vector3d x3D = mpCurrentKeyFrame->UnprojectStereo(idx);

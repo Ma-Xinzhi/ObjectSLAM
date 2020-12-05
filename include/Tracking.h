@@ -19,7 +19,7 @@ public:
 
     void GrabPoseAndSingleObject(const g2o::SE3Quat& pose, std::shared_ptr<Observation> bbox, const cv::Mat& img_RGB);
     void GrabPoseAndObjects(const g2o::SE3Quat& pose, const Observations& bbox, const cv::Mat& img_RGB);
-    void GrabRGBDImageAndObjects(const cv::Mat& img_RGB, const cv::Mat& depth, std::shared_ptr<Observation> bbox);
+    void GrabRGBDImage(const cv::Mat& img_RGB, const cv::Mat& depth, double timestamp);
 
     void SetLocalMapper(std::shared_ptr<LocalMapping> pLocalMapper) {mpLocalMapping = pLocalMapper;}
 

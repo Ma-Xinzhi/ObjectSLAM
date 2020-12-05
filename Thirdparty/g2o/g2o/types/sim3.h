@@ -67,7 +67,7 @@ public:
     }
 
 
-    Sim3(const Vector7d & update)  // exponential update
+    Sim3(const Vector7d & update)
     {
 
       Vector3d omega;
@@ -120,6 +120,8 @@ public:
         {
           R = I + sin(theta)/theta *Omega + (1-cos(theta))/(theta*theta)*Omega2;
 
+
+
           double a=s*sin(theta);
           double b=s*cos(theta);
           double theta2= theta*theta;
@@ -133,6 +135,8 @@ public:
       }
       r = Quaterniond(R);
 
+
+
       Matrix3d W = A*Omega + B*Omega2 + C*I;
       t = W*upsilon;
     }
@@ -145,6 +149,9 @@ public:
     {
       Vector7d res;
       double sigma = std::log(s);
+
+      
+
    
       Vector3d omega;
       Vector3d upsilon;

@@ -10,7 +10,7 @@ const int ORBmatcher::HISTO_LENGTH = 30; // 旋转角度的分隔
 
 ORBmatcher::ORBmatcher(float nratio, bool CheckOri): mfNNratio(nratio), mbCheckOrientation(CheckOri) {}
 
-int ORBmatcher::SearchByProjection(std::shared_ptr<Frame> pF, const std::vector<std::shared_ptr<MapPoint>> &vpMapPoints,
+int ORBmatcher::SearchByProjection(const std::shared_ptr<Frame>& pF, const std::vector<std::shared_ptr<MapPoint>> &vpMapPoints,
                                    float th) {
     int nmatches = 0;
 
@@ -87,7 +87,7 @@ int ORBmatcher::SearchByProjection(std::shared_ptr<Frame> pF, const std::vector<
     return nmatches;
 }
 
-int ORBmatcher::SearchByProjection(std::shared_ptr<Frame> pCurrentFrame, std::shared_ptr<Frame> pLastFrame, float th, bool bMono) {
+int ORBmatcher::SearchByProjection(const std::shared_ptr<Frame>& pCurrentFrame, const std::shared_ptr<Frame>& pLastFrame, float th, bool bMono) {
     int nmatches = 0;
 
     // Rotation Histogram (to check rotation consistency)
@@ -129,7 +129,7 @@ int ORBmatcher::SearchByProjection(std::shared_ptr<Frame> pCurrentFrame, std::sh
 
                 if(u<Frame::mnMinX || u>Frame::mnMaxX)
                     continue;
-                if(v<Frame::mnMinY || v<Frame::mnMaxY)
+                if(v<Frame::mnMinY || v>Frame::mnMaxY)
                     continue;
 
                 int nLastOctave = pLastFrame->mvKeysUn[i].octave;
@@ -217,7 +217,7 @@ int ORBmatcher::SearchByProjection(std::shared_ptr<Frame> pCurrentFrame, std::sh
     return nmatches;
 }
 
-int ORBmatcher::SearchByProjection(std::shared_ptr<Frame> pCurrentFrame, std::shared_ptr<KeyFrame> pKF,
+int ORBmatcher::SearchByProjection(const std::shared_ptr<Frame>& pCurrentFrame, const std::shared_ptr<KeyFrame>& pKF,
                                    const std::set<std::shared_ptr<MapPoint>> &sAlreadyFound, float th, int ORBdist) {
     int nmatches = 0;
 
@@ -261,7 +261,7 @@ int ORBmatcher::SearchByProjection(std::shared_ptr<Frame> pCurrentFrame, std::sh
                 if (dist3D < minDistance || dist3D > maxDistance)
                     continue;
 
-                int nPredictedLevel = pMP->PredictScale(dist3D, pCurrentFrame);
+                int nPredictedLevel = pMP->PredictScale(dist3D, pCurrentFrame.get());
 
                 float radius = th * pCurrentFrame->mvScaleFactors[nPredictedLevel];
 
@@ -327,7 +327,7 @@ int ORBmatcher::SearchByProjection(std::shared_ptr<Frame> pCurrentFrame, std::sh
     return nmatches;
 }
 
-int ORBmatcher::SearchByProjection(std::shared_ptr<Frame> pCurrentFrame, std::shared_ptr<KeyFrame> pKF, float th)
+int ORBmatcher::SearchByProjection(const std::shared_ptr<Frame>& pCurrentFrame, const std::shared_ptr<KeyFrame>& pKF, float th)
 {
     int nmatches = 0;
 
@@ -371,7 +371,7 @@ int ORBmatcher::SearchByProjection(std::shared_ptr<Frame> pCurrentFrame, std::sh
                 if (dist3D < minDistance || dist3D > maxDistance)
                     continue;
 
-                int nPredictedLevel = pMP->PredictScale(dist3D, pCurrentFrame);
+                int nPredictedLevel = pMP->PredictScale(dist3D, pCurrentFrame.get());
 
                 float radius = th * pCurrentFrame->mvScaleFactors[nPredictedLevel];
 
@@ -441,12 +441,12 @@ int ORBmatcher::SearchByProjection(std::shared_ptr<Frame> pCurrentFrame, std::sh
 //  这里不使用DBOW，我觉得可以利用语义信息做关联，或许比DBOW会好点
 
 /// 先用特征点匹配进行三角化的关联
-int ORBmatcher::SearchForTriangulation(std::shared_ptr<KeyFrame> pKF1, std::shared_ptr<KeyFrame> pKF2, const Eigen::Matrix3d& F12,
+int ORBmatcher::SearchForTriangulation(const std::shared_ptr<KeyFrame>& pKF1, const std::shared_ptr<KeyFrame>& pKF2, const Eigen::Matrix3d& F12,
                                        std::vector<std::pair<size_t, size_t>> &vMatchedPairs) {
 
 }
 
-int ORBmatcher::SearchBySim3(std::shared_ptr<KeyFrame> pKF1, std::shared_ptr<KeyFrame> pKF2,
+int ORBmatcher::SearchBySim3(const std::shared_ptr<KeyFrame>& pKF1, const std::shared_ptr<KeyFrame>& pKF2,
                              std::vector<std::shared_ptr<MapPoint>> &vpMatches12, const float &s12, const Eigen::Matrix3d &R12,
                              const Eigen::Vector3d &t12, const float th) {
     float fx = pKF1->fx;
@@ -518,7 +518,7 @@ int ORBmatcher::SearchBySim3(std::shared_ptr<KeyFrame> pKF1, std::shared_ptr<Key
         if(dist3D<minDistance || dist3D>maxDistance)
             continue;
 
-        int nPredictedLevel = pMP->PredictScale(dist3D, pKF2);
+        int nPredictedLevel = pMP->PredictScale(dist3D, pKF2.get());
 
         float radius = th*pKF2->mvScaleFactors[nPredictedLevel];
 
@@ -578,7 +578,7 @@ int ORBmatcher::SearchBySim3(std::shared_ptr<KeyFrame> pKF1, std::shared_ptr<Key
         if(dist3D<minDistance || dist3D>maxDistance)
             continue;
 
-        int nPredictedLevel = pMP->PredictScale(dist3D, pKF1);
+        int nPredictedLevel = pMP->PredictScale(dist3D, pKF1.get());
 
         float radius = th*pKF1->mvScaleFactors[nPredictedLevel];
 
@@ -620,7 +620,7 @@ int ORBmatcher::SearchBySim3(std::shared_ptr<KeyFrame> pKF1, std::shared_ptr<Key
     return nFound;
 }
 
-int ORBmatcher::Fuse(std::shared_ptr<KeyFrame> pKF, const std::vector<std::shared_ptr<MapPoint>> &vpMapPoints, float th)
+int ORBmatcher::Fuse(const std::shared_ptr<KeyFrame>& pKF, const std::vector<std::shared_ptr<MapPoint>> &vpMapPoints, float th)
 {
     Eigen::Matrix3d Rwc = pKF->GetRotation();
     Eigen::Vector3d twc = pKF->GetTranslation();
@@ -675,7 +675,7 @@ int ORBmatcher::Fuse(std::shared_ptr<KeyFrame> pKF, const std::vector<std::share
         if(PO.dot(Pn) < 0.5*dist3D)
             continue;
 
-        int nPredictedLevel = pMP->PredictScale(dist3D, pKF);
+        int nPredictedLevel = pMP->PredictScale(dist3D, pKF.get());
 
         float radius = th*pKF->mvScaleFactors[nPredictedLevel];
 
@@ -745,7 +745,7 @@ int ORBmatcher::Fuse(std::shared_ptr<KeyFrame> pKF, const std::vector<std::share
     return nFused;
 }
 
-int ORBmatcher::Fuse(std::shared_ptr<KeyFrame> pKF, Eigen::Matrix4d Scw,
+int ORBmatcher::Fuse(const std::shared_ptr<KeyFrame>& pKF, Eigen::Matrix4d Scw,
                      const std::vector<std::shared_ptr<MapPoint>> &vpPoints, float th,
                      std::vector<std::shared_ptr<MapPoint>> &vpReplacePoint) {
     float fx = pKF->fx;
@@ -799,7 +799,7 @@ int ORBmatcher::Fuse(std::shared_ptr<KeyFrame> pKF, Eigen::Matrix4d Scw,
         if(PO.dot(Pn)<0.5*dist3D)
             continue;
 
-        int nPredictedLevel = pMP->PredictScale(dist3D, pKF);
+        int nPredictedLevel = pMP->PredictScale(dist3D, pKF.get());
 
         float radius = th*pKF->mvScaleFactors[nPredictedLevel];
 

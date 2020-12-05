@@ -64,7 +64,7 @@ namespace g2o {
       if (_fix_scale)
         update[6] = 0;
 
-      Sim3 s(update);  // exp map
+      Sim3 s(update);
       setEstimate(s*estimate());
     }
 
@@ -119,9 +119,9 @@ namespace g2o {
       VertexSim3Expmap* v1 = static_cast<VertexSim3Expmap*>(_vertices[0]);
       VertexSim3Expmap* v2 = static_cast<VertexSim3Expmap*>(_vertices[1]);
       if (from.count(v1) > 0)
-	  v2->setEstimate(measurement()*v1->estimate());
+  v2->setEstimate(measurement()*v1->estimate());
       else
-	  v1->setEstimate(measurement().inverse()*v2->estimate());
+  v1->setEstimate(measurement().inverse()*v2->estimate());
     }
   };
 

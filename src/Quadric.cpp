@@ -74,7 +74,12 @@ namespace g2o{
     // xyz roll pitch yaw half_scale
     Vector9d Quadric::toRPYVector() const{
         Vector9d v;
-        v.head<6>() = mPose.toXYZPRYVector();
+        double yaw, pitch, roll;
+        quat_to_euler_zyx(mPose.rotation(), roll, pitch, yaw);
+        v.head<3>() = mPose.translation();
+        v[3] = roll;
+        v[4] = pitch;
+        v[5] = yaw;
         v.tail<3>() = mScale;
         return v;
     }

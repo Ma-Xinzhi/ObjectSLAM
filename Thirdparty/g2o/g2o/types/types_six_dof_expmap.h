@@ -54,7 +54,7 @@ typedef Matrix<double, 6, 6> Matrix6d;
 
 /**
  * \brief SE3 Vertex parameterized internally with a transformation matrix
- and externally with its exponential map   stores world to cam
+ and externally with its exponential map
  */
 class  VertexSE3Expmap : public BaseVertex<6, SE3Quat>{
 public:
@@ -62,9 +62,9 @@ public:
 
   VertexSE3Expmap();
 
-  virtual bool read(std::istream& is);
+  bool read(std::istream& is);
 
-  virtual bool write(std::ostream& os) const;
+  bool write(std::ostream& os) const;
 
   virtual void setToOriginImpl() {
     _estimate = SE3Quat();
@@ -74,71 +74,6 @@ public:
     Eigen::Map<const Vector6d> update(update_);
     setEstimate(SE3Quat::exp(update)*estimate());
   }
-};
-
-
-/**
-* \brief 6D edge between two Vertex6
-*/
-class EdgeSE3Expmap : public BaseBinaryEdge<6, SE3Quat, VertexSE3Expmap, VertexSE3Expmap>
-{
-public:
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-  EdgeSE3Expmap(){};
-  bool read(std::istream& is);
-  bool write(std::ostream& os) const;
-  void computeError()
-  {
-    const VertexSE3Expmap* v1 = static_cast<const VertexSE3Expmap*>(_vertices[0]);
-    const VertexSE3Expmap* v2 = static_cast<const VertexSE3Expmap*>(_vertices[1]);
-
-    SE3Quat C(_measurement);
-    SE3Quat error_= C*v1->estimate()*v2->estimate().inverse();  // from sim3 orbslam   vertex 保存的是 world to cam. measurent 是 from 1 to 2
-//     SE3Quat error_=C*v2->estimate().inverse()*v1->estimate();     // similar as LSD    
-    _error = error_.log();
-  }
-  
-  g2o::Vector6d showError()
-  {
-      const VertexSE3Expmap* v1 = static_cast<const VertexSE3Expmap*>(_vertices[0]);
-      const VertexSE3Expmap* v2 = static_cast<const VertexSE3Expmap*>(_vertices[1]);
-      
-      SE3Quat C(_measurement);
-      SE3Quat error_= C*v1->estimate()*v2->estimate().inverse();  // from sim3 orbslam
-//       SE3Quat error_=C*v2->estimate().inverse()*v1->estimate();     // similar as LSD
-      
-      std::cout<<"error_ "<<error_.toVector().transpose()<<std::endl;
-      
-      return error_.log();
-  }
-
-  double get_error_norm()
-  {
-    const VertexSE3Expmap* v1 = static_cast<const VertexSE3Expmap*>(_vertices[0]);
-    const VertexSE3Expmap* v2 = static_cast<const VertexSE3Expmap*>(_vertices[1]);
-
-    SE3Quat C(_measurement);
-    SE3Quat error_= C*v1->estimate()*v2->estimate().inverse(); // from sim3 orbslam
-//     SE3Quat error_=C*v2->estimate().inverse()*v1->estimate(); // similar as LSD
-    return error_.log().norm();
-  }
-  
-  virtual double initialEstimatePossible(const OptimizableGraph::VertexSet& , OptimizableGraph::Vertex* ) { return 1.;}
-  virtual void initialEstimate(const OptimizableGraph::VertexSet& from, OptimizableGraph::Vertex* /*to*/)
-  {
-    VertexSE3Expmap* v1 = static_cast<VertexSE3Expmap*>(_vertices[0]);
-    VertexSE3Expmap* v2 = static_cast<VertexSE3Expmap*>(_vertices[1]);
-    if (from.count(v1) > 0)
-	v2->setEstimate(measurement()*v1->estimate());
-// 	v2->setEstimate(v1->estimate()*measurement());
-    else
-	v1->setEstimate(measurement().inverse()*v2->estimate());
-// 	v1->setEstimate(v2->estimate()*measurement().inverse());
-  }
-  void setMeasurement(const SE3Quat& m){
-    _measurement = m;
-  }
-//   void linearizeOplus();   // compute exact jacobian  LSD and raw g2o has this.
 };
 
 

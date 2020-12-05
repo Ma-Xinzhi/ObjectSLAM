@@ -23,7 +23,6 @@
 // LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
 // NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#pragma once
 
   Matrix3d skew(const Vector3d&v)
   {
@@ -82,30 +81,5 @@
     res(3) = 1;
     return res;
   }
-  
-Eigen::Quaterniond zyx_euler_to_quat(const double &roll, const double &pitch, const double &yaw)
-{
-      double sy = sin(yaw*0.5);
-      double cy = cos(yaw*0.5);
-      double sp = sin(pitch*0.5);
-      double cp = cos(pitch*0.5);
-      double sr = sin(roll*0.5);
-      double cr = cos(roll*0.5);
-      double w = cr*cp*cy + sr*sp*sy;
-      double x = sr*cp*cy - cr*sp*sy;
-      double y = cr*sp*cy + sr*cp*sy;
-      double z = cr*cp*sy - sr*sp*cy;
-      return Eigen::Quaterniond(w,x,y,z);
-}
 
-void quat_to_euler_zyx(const Eigen::Quaterniond q, double& roll, double& pitch, double& yaw)
-{
-      const double qw = q.w();
-      const double qx = q.x();
-      const double qy = q.y();
-      const double qz = q.z();
-      
-      roll = atan2(2*(qw*qx+qy*qz), 1-2*(qx*qx+qy*qy));
-      pitch = asin(2*(qw*qy-qz*qx));
-      yaw = atan2(2*(qw*qz+qx*qy), 1-2*(qy*qy+qz*qz));
-}
+

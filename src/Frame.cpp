@@ -64,14 +64,15 @@ Frame::Frame(const cv::Mat &imGray, const cv::Mat &depth, double timeStamp, std:
 }
 
 Frame::Frame(const g2o::SE3Quat& pose, const std::vector<std::shared_ptr<Observation>>& bbox, const cv::Mat& Image):
-    mTwc(pose), mvpObservation(bbox), mFrameImg(Image){
+    mvpObservation(bbox), mFrameImg(Image){
+    mTwc = pose.to_homogeneous_matrix();
     mnId = nNextId++;
 }
 
-Frame::Frame(const g2o::SE3Quat& pose, std::shared_ptr<Observation> bbox, const cv::Mat& Image):
-    mTwc(pose), mFrameImg(Image){
+Frame::Frame(const g2o::SE3Quat& pose, std::shared_ptr<Observation> bbox, const cv::Mat& Image):mFrameImg(Image){
     static int id = 0;
     mnId = id++;
+    mTwc = pose.to_homogeneous_matrix();
     mvpObservation.push_back(bbox);
 }
 
@@ -86,7 +87,7 @@ void Frame::SetPose(const Eigen::Matrix4d &pose_wc) {
 }
 
 // r是搜索的范围
-std::vector<size_t> Frame::GetFeaturesInArea(float x, float y, float r, const int minLevel, const int maxLevel) const {
+std::vector<size_t> Frame::GetFeaturesInArea(float x, float y, float r, int minLevel, int maxLevel) const {
     std::vector<size_t> vIndices;
     vIndices.reserve(N);
 
@@ -102,7 +103,7 @@ std::vector<size_t> Frame::GetFeaturesInArea(float x, float y, float r, const in
     if(nMinCellY >= FRAME_GRID_ROWS)
         return vIndices;
 
-    int nMaxCellY = std::min(0, (int)ceil((y+r-mnMinY)*mfGridElementHeightInv));
+    int nMaxCellY = std::min(FRAME_GRID_ROWS-1, (int)ceil((y+r-mnMinY)*mfGridElementHeightInv));
     if(nMaxCellY < 0)
         return vIndices;
 
@@ -133,7 +134,7 @@ std::vector<size_t> Frame::GetFeaturesInArea(float x, float y, float r, const in
     return vIndices;
 }
 
-bool Frame::isInFrustum(std::shared_ptr<MapPoint> pMP, float viewingCosLimit) {
+bool Frame::isInFrustum(const std::shared_ptr<MapPoint>& pMP, float viewingCosLimit) {
     pMP->mbTrackInView = false;
 
     Eigen::Vector3d P = pMP->GetWorldPos();
@@ -172,7 +173,7 @@ bool Frame::isInFrustum(std::shared_ptr<MapPoint> pMP, float viewingCosLimit) {
     if(viewCos < viewingCosLimit)
         return false;
 
-    int nPredictedLevel = pMP->PredictScale(dist, std::shared_ptr<Frame>(this));
+    int nPredictedLevel = pMP->PredictScale(dist, this);
 
     // 在Tracking中使用的数据
     pMP->mbTrackInView = true;
@@ -246,17 +247,17 @@ void Frame::ComputeImageBounds(const cv::Mat &img) {
         cv::Mat mat(4, 2, CV_32F);
         mat.at<float>(0,0) = 0.0f; mat.at<float>(0,1) = 0.0f;
         mat.at<float>(1,0) = img.cols; mat.at<float>(1,1) = 0.0f;
-        mat.at<float>(2,0) = img.rows; mat.at<float>(2,1) = 0.0f;
-        mat.at<float>(3,0) = img.rows; mat.at<float>(3,1) = img.cols;
+        mat.at<float>(2,0) = 0.0f; mat.at<float>(2,1) = img.rows;
+        mat.at<float>(3,0) = img.cols; mat.at<float>(3,1) = img.rows;
 
         mat = mat.reshape(2);
         cv::undistortPoints(mat, mat, mK, mDistCoef, cv::Mat(), mK);
         mat = mat.reshape(1);
 
         mnMinX = std::min(mat.at<float>(0,0), mat.at<float>(2,0));
-        mnMaxX = std::min(mat.at<float>(1,0), mat.at<float>(3,0));
+        mnMaxX = std::max(mat.at<float>(1,0), mat.at<float>(3,0));
         mnMinY = std::min(mat.at<float>(0,1), mat.at<float>(1,1));
-        mnMaxY = std::min(mat.at<float>(2,1), mat.at<float>(3,1));
+        mnMaxY = std::max(mat.at<float>(2,1), mat.at<float>(3,1));
     }
     else{
         mnMinX = 0.0f;

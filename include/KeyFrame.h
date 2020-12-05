@@ -12,21 +12,21 @@
 class MapPoint;
 class Map;
 
-class KeyFrame{
+class KeyFrame: public std::enable_shared_from_this<KeyFrame>
+{
 public:
-    KeyFrame(std::shared_ptr<Frame> F, std::shared_ptr<Map> pMap);
+    KeyFrame(const std::shared_ptr<Frame>& F, const std::shared_ptr<Map>& pMap);
 
     // Pose functions
     void SetPose(const Eigen::Matrix4d &Twc);
     Eigen::Matrix4d GetPose();
-    Eigen::Matrix4d GetPoseInverse();
     Eigen::Matrix3d GetRotation();
     Eigen::Vector3d GetCameraCenter();
     Eigen::Vector3d GetTranslation();
 
     // Covisibility graph functions
-    void AddConnection(std::shared_ptr<KeyFrame> pKF, const int &weight);
-    void EraseConnection(std::shared_ptr<KeyFrame> pKF);
+    void AddConnection(const std::shared_ptr<KeyFrame>& pKF, const int &weight);
+    void EraseConnection(const std::shared_ptr<KeyFrame>& pKF);
     void UpdateConnections();
     void UpdateBestCovisibles();
     std::set<std::shared_ptr<KeyFrame>> GetConnectedKeyFrames();
@@ -36,25 +36,25 @@ public:
     int GetWeight(std::shared_ptr<KeyFrame> pKF);
 
     // Spanning tree functions
-    void AddChild(std::shared_ptr<KeyFrame> pKF);
-    void EraseChild(std::shared_ptr<KeyFrame> pKF);
-    void ChangeParent(std::shared_ptr<KeyFrame> pKF);
+    void AddChild(const std::shared_ptr<KeyFrame>& pKF);
+    void EraseChild(const std::shared_ptr<KeyFrame>& pKF);
+    void ChangeParent(const std::shared_ptr<KeyFrame>& pKF);
     std::set<std::shared_ptr<KeyFrame>> GetChilds();
     std::shared_ptr<KeyFrame> GetParent();
-    bool hasChild(std::shared_ptr<KeyFrame> pKF);
+    bool hasChild(const std::shared_ptr<KeyFrame>& pKF);
 
     // MapPoint observation functions
-    void AddMapPoint(std::shared_ptr<MapPoint> pMP, const size_t &idx);
+    void AddMapPoint(const std::shared_ptr<MapPoint>& pMP, const size_t &idx);
     void EraseMapPointMatch(const size_t &idx);
-    void EraseMapPointMatch(std::shared_ptr<MapPoint> pMP);
-    void ReplaceMapPointMatch(const size_t &idx, std::shared_ptr<MapPoint> pMP);
+    void EraseMapPointMatch(const std::shared_ptr<MapPoint>& pMP);
+    void ReplaceMapPointMatch(const size_t &idx, const std::shared_ptr<MapPoint>& pMP);
     std::set<std::shared_ptr<MapPoint>> GetMapPoints();
     std::vector<std::shared_ptr<MapPoint>> GetMapPointMatches();
     int TrackedMapPoints(int minObs);
     std::shared_ptr<MapPoint> GetMapPoint(size_t idx);
 
     // KeyPoint functions
-    std::vector<size_t> GetFeaturesInArea(float x, float y, float r, const int minLevel=-1, const int maxLevel=-1) const;
+    std::vector<size_t> GetFeaturesInArea(float x, float y, float r, int minLevel=-1, int maxLevel=-1) const;
     Eigen::Vector3d UnprojectStereo(int i);
 
     // Image
@@ -72,7 +72,7 @@ public:
         return a>b;
     }
 
-    static bool IdComp(std::shared_ptr<KeyFrame> pKF1, std::shared_ptr<KeyFrame> pKF2){
+    static bool IdComp(const std::shared_ptr<KeyFrame>& pKF1, const std::shared_ptr<KeyFrame>& pKF2){
         return pKF1->mnId<pKF2->mnId;
     }
 public:
@@ -133,7 +133,8 @@ private:
     Eigen::Matrix3d mRwc;
     Eigen::Vector3d mtwc;
 
-    std::vector<std::shared_ptr<MapPoint>> mvpMapPoints;
+    // 相互引用，MapPoint里面引用了KeyFrame
+    std::vector<std::weak_ptr<MapPoint>> mvpMapPoints;
 
     // Grid over the image to speed up feature matching
     std::vector<std::vector<std::vector<size_t>>> mGrid;

@@ -15,6 +15,9 @@ class MapDrawer{
 public:
     MapDrawer(const std::string& strSettingPath,std::shared_ptr<Map> pmap);
 
+    void DrawMapPoints();
+    void DrawKeyFrames(bool bDrawKF, bool bDrawGraph);
+
     void DrawCurrentCamera(const pangolin::OpenGlMatrix& Twc);
     void DrawTrajectory();
     void DrawEllipsoids();

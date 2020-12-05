@@ -5,7 +5,7 @@
 long unsigned int MapPoint::nNextId = 0;
 std::mutex MapPoint::mGlobalMutex;
 
-MapPoint::MapPoint(const Eigen::Vector3d &Pos, std::shared_ptr<KeyFrame> pRefKF, std::shared_ptr<Map> pMap):
+MapPoint::MapPoint(const Eigen::Vector3d& Pos, const std::shared_ptr<KeyFrame>& pRefKF, const std::shared_ptr<Map>& pMap):
                    mWorldPos(Pos), mnFirstKFid(pRefKF->mnId), mnFirstFrame(pRefKF->mnFrameId), nObs(0),
                    mnTrackReferenceForFrame(-1), mnLastFrameSeen(-1), mnBALocalForKF(-1), mnFuseCandidateForKF(-1),
                    mpRefKF(pRefKF), mnVisible(1), mnFound(1), mbBad(false), mpReplaced(nullptr), mfMinDistance(0),
@@ -16,7 +16,7 @@ MapPoint::MapPoint(const Eigen::Vector3d &Pos, std::shared_ptr<KeyFrame> pRefKF,
     mnId = nNextId++;
 }
 
-MapPoint::MapPoint(const Eigen::Vector3d &Pos, std::shared_ptr<Map> pMap, std::shared_ptr<Frame> pFrame,
+MapPoint::MapPoint(const Eigen::Vector3d &Pos, const std::shared_ptr<Map>& pMap, const std::shared_ptr<Frame>& pFrame,
                    const int &idxF): mWorldPos(Pos), mnFirstKFid(-1), mnFirstFrame(pFrame->mnId), nObs(0), mnTrackReferenceForFrame(-1),
                    mnLastFrameSeen(-1), mnBALocalForKF(-1), mnFuseCandidateForKF(-1), mpRefKF(nullptr), mnVisible(1),
                    mnFound(1), mbBad(false), mpReplaced(nullptr), mpMap(pMap){
@@ -60,7 +60,7 @@ std::shared_ptr<KeyFrame> MapPoint::GetReferenceKeyFrame() {
     return mpRefKF;
 }
 
-void MapPoint::AddObservation(std::shared_ptr<KeyFrame> pKF, size_t idx) {
+void MapPoint::AddObservation(const std::shared_ptr<KeyFrame>& pKF, size_t idx) {
     std::unique_lock<std::mutex> lk(mMutexFeatures);
     if(mObservations.count(pKF))
         return;
@@ -76,7 +76,7 @@ std::map<std::shared_ptr<KeyFrame>,size_t> MapPoint::GetObservations() {
     return mObservations;
 }
 
-void MapPoint::EraseObservation(std::shared_ptr<KeyFrame> pKF) {
+void MapPoint::EraseObservation(const std::shared_ptr<KeyFrame>& pKF) {
     bool bBad = false;
     {
         std::unique_lock<std::mutex> lk(mMutexFeatures);
@@ -117,7 +117,7 @@ void MapPoint::SetBadFlag() {
         std::shared_ptr<KeyFrame> pKF = item.first;
         pKF->EraseMapPointMatch(item.second);
     }
-    mpMap.lock()->EraseMapPoint(std::shared_ptr<MapPoint>(this));
+    mpMap.lock()->EraseMapPoint(shared_from_this());
 }
 
 std::shared_ptr<MapPoint> MapPoint::GetReplaced() {
@@ -126,7 +126,7 @@ std::shared_ptr<MapPoint> MapPoint::GetReplaced() {
     return mpReplaced;
 }
 
-void MapPoint::Replace(std::shared_ptr<MapPoint> pMP) {
+void MapPoint::Replace(const std::shared_ptr<MapPoint>& pMP) {
     if(pMP->mnId == mnId)
         return;
     int nvisible, nfound;
@@ -154,7 +154,7 @@ void MapPoint::Replace(std::shared_ptr<MapPoint> pMP) {
     pMP->IncreaseVisible(nvisible);
     pMP->ComputeDistinctiveDescriptors();
 
-    mpMap.lock()->EraseMapPoint(std::shared_ptr<MapPoint>(this));
+    mpMap.lock()->EraseMapPoint(shared_from_this());
 }
 
 bool MapPoint::isBad() {
@@ -236,7 +236,7 @@ cv::Mat MapPoint::GetDescriptor() {
     return mDescriptor.clone();
 }
 
-int MapPoint::GetIndexInKeyFrame(std::shared_ptr<KeyFrame> pKF) {
+int MapPoint::GetIndexInKeyFrame(const std::shared_ptr<KeyFrame>& pKF) {
     std::unique_lock<std::mutex> lk(mMutexFeatures);
     if(mObservations.count(pKF))
         return mObservations[pKF];
@@ -244,7 +244,7 @@ int MapPoint::GetIndexInKeyFrame(std::shared_ptr<KeyFrame> pKF) {
         return -1;
 }
 
-bool MapPoint::IsInKeyFrame(std::shared_ptr<KeyFrame> pKF) {
+bool MapPoint::IsInKeyFrame(const std::shared_ptr<KeyFrame>& pKF) {
     std::unique_lock<std::mutex> lk(mMutexFeatures);
     return mObservations.count(pKF);
 }
@@ -302,7 +302,7 @@ float MapPoint::GetMaxDistanceInvariance() {
 }
 
 // 距离越小，说明层数越高，所对应的尺度也就越大
-int MapPoint::PredictScale(const float &currentDist, std::shared_ptr<KeyFrame> pKF) {
+int MapPoint::PredictScale(const float &currentDist, const KeyFrame* pKF) {
     float ratio;
     {
         std::unique_lock<std::mutex> lk(mMutexPos);
@@ -318,7 +318,7 @@ int MapPoint::PredictScale(const float &currentDist, std::shared_ptr<KeyFrame> p
 
 }
 
-int MapPoint::PredictScale(const float &currentDist, std::shared_ptr<Frame> pF) {
+int MapPoint::PredictScale(const float &currentDist, const Frame* pF) {
     float ratio;
     {
         std::unique_lock<std::mutex> lk(mMutexPos);

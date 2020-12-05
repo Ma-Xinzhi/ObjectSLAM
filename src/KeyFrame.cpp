@@ -4,7 +4,7 @@
 #include "ORBmatcher.h"
 
 unsigned long int KeyFrame::nNextId = 0;
-KeyFrame::KeyFrame(std::shared_ptr<Frame> F, std::shared_ptr<Map> pMap):
+KeyFrame::KeyFrame(const std::shared_ptr<Frame>& F, const std::shared_ptr<Map>& pMap):
     mnFrameId(F->mnId), mTimeStamp(F->mTimeStamp), mnGridCols(FRAME_GRID_COLS), mnGridRows(FRAME_GRID_ROWS),
     mfGridElementWidthInv(Frame::mfGridElementWidthInv), mfGridElementHeightInv(Frame::mfGridElementHeightInv),
     mnTrackReferenceForFrame(-1), mnFuseTargetForKF(-1), mnBALocalForKF(-1), mnBAFixedForKF(-1),
@@ -13,8 +13,8 @@ KeyFrame::KeyFrame(std::shared_ptr<Frame> F, std::shared_ptr<Map> pMap):
     mvuRight(F->mvuRight), mvDepth(F->mvDepth), mDescriptors(F->mDescriptors.clone()),mnScaleLevels(F->mnScaleLevels),
     mfScaleFactor(F->mfScaleFactor), mfLogScaleFactor(F->mfLogScaleFactor), mvScaleFactors(F->mvScaleFactors),
     mvLevelSigma2(F->mvLevelSigma2), mvInvLevelSigma2(F->mvInvLevelSigma2), mnMinX(Frame::mnMinX), mnMinY(Frame::mnMinY),
-    mnMaxX(Frame::mnMaxX), mnMaxY(Frame::mnMaxY), mK(F->mK), mvpMapPoints(F->mvpMapPoints),mbFirstConnection(true),
-    mpParent(nullptr), mbNotErase(false), mbToBeErased(false), mbBad(false), mpMap(pMap)
+    mnMaxX(Frame::mnMaxX), mnMaxY(Frame::mnMaxY), mK(F->mK),mbFirstConnection(true), mpParent(nullptr), mbNotErase(false),
+    mbToBeErased(false), mbBad(false), mpMap(pMap)
 {
     mnId = nNextId++;
 
@@ -24,6 +24,11 @@ KeyFrame::KeyFrame(std::shared_ptr<Frame> F, std::shared_ptr<Map> pMap):
         for(int j=0; j<mnGridRows; j++)
             mGrid[i][j] = F->mGrid[i][j];
     }
+
+    mvpMapPoints.resize(F->mvpMapPoints.size());
+    for(int i=0; i<F->mvpMapPoints.size(); i++)
+        mvpMapPoints[i] = F->mvpMapPoints[i];
+
     SetPose(F->GetPose());
 }
 
@@ -53,7 +58,7 @@ Eigen::Vector3d KeyFrame::GetTranslation() {
     return mtwc;
 }
 
-void KeyFrame::AddConnection(std::shared_ptr<KeyFrame> pKF, const int &weight)
+void KeyFrame::AddConnection(const std::shared_ptr<KeyFrame>& pKF, const int &weight)
 {
     {
         std::unique_lock<std::mutex> lk(mMutexConnections);
@@ -129,24 +134,24 @@ int KeyFrame::GetWeight(std::shared_ptr<KeyFrame> pKF) {
         return 0;
 }
 
-void KeyFrame::AddMapPoint(std::shared_ptr<MapPoint> pMP, const size_t &idx) {
+void KeyFrame::AddMapPoint(const std::shared_ptr<MapPoint>& pMP, const size_t &idx) {
     std::unique_lock<std::mutex> lk(mMutexFeatures);
     mvpMapPoints[idx] = pMP;
 }
 
 void KeyFrame::EraseMapPointMatch(const size_t &idx) {
     std::unique_lock<std::mutex> lk(mMutexFeatures);
-    mvpMapPoints[idx] = nullptr;
+    mvpMapPoints[idx].reset();
 }
 
-void KeyFrame::EraseMapPointMatch(std::shared_ptr<MapPoint> pMP) {
+void KeyFrame::EraseMapPointMatch(const std::shared_ptr<MapPoint>& pMP) {
     std::unique_lock<std::mutex> lk(mMutexFeatures);
-    int idx = pMP->GetIndexInKeyFrame(std::shared_ptr<KeyFrame>(this));
+    int idx = pMP->GetIndexInKeyFrame(shared_from_this());
     if(idx >= 0)
-        mvpMapPoints[idx] = nullptr;
+        mvpMapPoints[idx].reset();
 }
 
-void KeyFrame::ReplaceMapPointMatch(const size_t &idx, std::shared_ptr<MapPoint> pMP) {
+void KeyFrame::ReplaceMapPointMatch(const size_t &idx, const std::shared_ptr<MapPoint>& pMP) {
     std::unique_lock<std::mutex> lk(mMutexFeatures);
     mvpMapPoints[idx] = pMP;
 }
@@ -155,10 +160,10 @@ std::set<std::shared_ptr<MapPoint>> KeyFrame::GetMapPoints() {
     std::unique_lock<std::mutex> lk(mMutexFeatures);
     std::set<std::shared_ptr<MapPoint>> s;
     for(auto& mp : mvpMapPoints){
-        if(!mp)
+        if(mp.expired())
             continue;
-        if(!mp->isBad())
-            s.insert(mp);
+        if(!mp.lock()->isBad())
+            s.insert(mp.lock());
     }
     return s;
 }
@@ -168,10 +173,10 @@ int KeyFrame::TrackedMapPoints(int minObs) {
     int nPoints = 0;
     bool bCheckObs = minObs > 0;
     for(auto& pMp : mvpMapPoints){
-        if(pMp){
-            if(!pMp->isBad()){
+        if(!pMp.expired()){
+            if(!pMp.lock()->isBad()){
                 if(bCheckObs){
-                    if(pMp->Observations()>=minObs)
+                    if(pMp.lock()->Observations()>=minObs)
                         nPoints++;
                 } else
                     nPoints++;
@@ -183,30 +188,34 @@ int KeyFrame::TrackedMapPoints(int minObs) {
 
 std::vector<std::shared_ptr<MapPoint>> KeyFrame::GetMapPointMatches() {
     std::unique_lock<std::mutex> lk(mMutexFeatures);
-    return mvpMapPoints;
+    std::vector<std::shared_ptr<MapPoint>> vpMapPoints;
+    vpMapPoints.reserve(mvpMapPoints.size());
+    for(auto& pMP : mvpMapPoints)
+        vpMapPoints.push_back(pMP.lock());
+    return vpMapPoints;
 }
 
 std::shared_ptr<MapPoint> KeyFrame::GetMapPoint(size_t idx) {
     std::unique_lock<std::mutex> lk(mMutexFeatures);
-    return mvpMapPoints[idx];
+    return mvpMapPoints[idx].lock();
 }
 
 void KeyFrame::UpdateConnections() {
     std::map<std::shared_ptr<KeyFrame>, int> KFcounter;
-    std::vector<std::shared_ptr<MapPoint>> vpMp;
+    std::vector<std::weak_ptr<MapPoint>> vpMp;
     {
         std::unique_lock<std::mutex> lk(mMutexFeatures);
         vpMp = mvpMapPoints;
     }
     // 当前关键帧观察到的地图点
     for(auto& pMp : vpMp){
-        if(!pMp)
+        if(pMp.expired())
             continue;
 
-        if(pMp->isBad())
+        if(pMp.lock()->isBad())
             continue;
 
-        std::map<std::shared_ptr<KeyFrame>, size_t> observations = pMp->GetObservations();
+        std::map<std::shared_ptr<KeyFrame>, size_t> observations = pMp.lock()->GetObservations();
         // 地图点在其他关键帧中的观测
         for(auto& ob : observations){
             if(ob.first->mnId == mnId)
@@ -232,12 +241,12 @@ void KeyFrame::UpdateConnections() {
         }
         if(item.second >= th){
             vPairs.emplace_back(std::make_pair(item.second, item.first));
-            item.first->AddConnection(std::shared_ptr<KeyFrame>(this), item.second);
+            item.first->AddConnection(shared_from_this(), item.second);
         }
     }
     if(vPairs.empty()){
         vPairs.emplace_back(std::make_pair(nmax, pKFmax));
-        pKFmax->AddConnection(std::shared_ptr<KeyFrame>(this), nmax);
+        pKFmax->AddConnection(shared_from_this(), nmax);
     }
 
     // 默认按升序排列
@@ -262,26 +271,26 @@ void KeyFrame::UpdateConnections() {
 
         if(mbFirstConnection && mnId != 0){
             mpParent = mvpOrderedConnectedKeyFrames.front();
-            mpParent->AddChild(std::shared_ptr<KeyFrame>(this));
+            mpParent->AddChild(shared_from_this());
             mbFirstConnection = false;
         }
     }
 }
 
-void KeyFrame::AddChild(std::shared_ptr<KeyFrame> pKF) {
+void KeyFrame::AddChild(const std::shared_ptr<KeyFrame>& pKF) {
     std::unique_lock<std::mutex> lk(mMutexConnections);
     mspChildrens.insert(pKF);
 }
 
-void KeyFrame::EraseChild(std::shared_ptr<KeyFrame> pKF) {
+void KeyFrame::EraseChild(const std::shared_ptr<KeyFrame>& pKF) {
     std::unique_lock<std::mutex> lk(mMutexConnections);
     mspChildrens.erase(pKF);
 }
 
-void KeyFrame::ChangeParent(std::shared_ptr<KeyFrame> pKF) {
+void KeyFrame::ChangeParent(const std::shared_ptr<KeyFrame>& pKF) {
     std::unique_lock<std::mutex> lk(mMutexConnections);
     mpParent = pKF;
-    pKF->AddChild(std::shared_ptr<KeyFrame>(this));
+    pKF->AddChild(shared_from_this());
 }
 
 std::set<std::shared_ptr<KeyFrame>> KeyFrame::GetChilds() {
@@ -294,7 +303,7 @@ std::shared_ptr<KeyFrame> KeyFrame::GetParent() {
     return mpParent;
 }
 
-bool KeyFrame::hasChild(std::shared_ptr<KeyFrame> pKF) {
+bool KeyFrame::hasChild(const std::shared_ptr<KeyFrame>& pKF) {
     std::unique_lock<std::mutex> lk(mMutexConnections);
     return mspChildrens.count(pKF);
 }
@@ -327,7 +336,7 @@ void KeyFrame::SetBadFlag() {
             return;
     }
     for(auto& item : mConnectedKeyFrameWeights)
-        item.first->EraseConnection(std::shared_ptr<KeyFrame>(this));
+        item.first->EraseConnection(shared_from_this());
     {
         std::unique_lock<std::mutex> lk(mMutexConnections);
         std::unique_lock<std::mutex> lk1(mMutexFeatures);
@@ -379,12 +388,12 @@ void KeyFrame::SetBadFlag() {
                 child->ChangeParent(mpParent);
         }
 
-        mpParent->EraseChild(std::shared_ptr<KeyFrame>(this));
+        mpParent->EraseChild(shared_from_this());
         mTcp = mTwc.inverse() * mpParent->GetPose();
         mbBad = true;
     }
 
-    mpMap.lock()->EraseKeyFrame(std::shared_ptr<KeyFrame>(this));
+    mpMap.lock()->EraseKeyFrame(shared_from_this());
 
 }
 
@@ -394,7 +403,7 @@ bool KeyFrame::isBad() {
 }
 
 // 应该先删除关键帧观测到的地图点，再删除关键帧之间的关联
-void KeyFrame::EraseConnection(std::shared_ptr<KeyFrame> pKF) {
+void KeyFrame::EraseConnection(const std::shared_ptr<KeyFrame>& pKF) {
     bool bUpdate = false;
     {
         std::unique_lock<std::mutex> lk(mMutexConnections);

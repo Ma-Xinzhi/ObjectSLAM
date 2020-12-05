@@ -11,7 +11,7 @@
 
 #include <mutex>
 
-int Optimizer::PoseOptimization(std::shared_ptr<Frame> pFrame) {
+int Optimizer::PoseOptimization(const std::shared_ptr<Frame>& pFrame) {
     g2o::SparseOptimizer optimizer;
     g2o::BlockSolver_6_3::LinearSolverType* linearSolver;
 
@@ -37,7 +37,7 @@ int Optimizer::PoseOptimization(std::shared_ptr<Frame> pFrame) {
     std::vector<size_t> vnIndexEdgeStereo;
     vnIndexEdgeStereo.reserve(N);
 
-    const float deltaMono = sqrt(5.991);
+//    const float deltaMono = sqrt(5.991);
     const float deltaStereo = sqrt(7.815);
     {
         std::unique_lock<std::mutex> lk(MapPoint::mGlobalMutex);
@@ -89,7 +89,7 @@ int Optimizer::PoseOptimization(std::shared_ptr<Frame> pFrame) {
     if(nInitialCorrespondances < 3)
         return 0;
 
-    const float chi2Mono[4]={5.991,5.991,5.991,5.991};
+//    const float chi2Mono[4]={5.991,5.991,5.991,5.991};
     const float chi2Stereo[4]={7.815,7.815,7.815,7.815};
     const int its[4]={10,10,10,10};
 
@@ -144,7 +144,7 @@ g2o::SE3Quat Optimizer::toSE3Quat(const Eigen::Matrix4d &pose) {
     return g2o::SE3Quat(R, t);
 }
 
-void Optimizer::LocalBundleAdjustment(std::shared_ptr<KeyFrame> pKF, bool *pbStopFlag, std::shared_ptr<Map> pMap) {
+void Optimizer::LocalBundleAdjustment(const std::shared_ptr<KeyFrame>& pKF, bool *pbStopFlag, std::shared_ptr<Map> pMap) {
     std::list<std::shared_ptr<KeyFrame>> lLocalKeyFrames;
 
     lLocalKeyFrames.push_back(pKF);
@@ -315,7 +315,7 @@ void Optimizer::LocalBundleAdjustment(std::shared_ptr<KeyFrame> pKF, bool *pbSto
     }
 
     std::vector<std::pair<std::shared_ptr<KeyFrame>, std::shared_ptr<MapPoint>>> vToErase;
-    vToErase.resize(vpEdgesStereo.size());
+    vToErase.reserve(vpEdgesStereo.size());
 
     for (int i = 0; i < vpEdgesStereo.size(); ++i) {
         g2o::EdgeStereoSE3ProjectXYZ* e = vpEdgesStereo[i];
@@ -353,4 +353,5 @@ void Optimizer::LocalBundleAdjustment(std::shared_ptr<KeyFrame> pKF, bool *pbSto
         pMP->SetWorldPos(vPoint->estimate());
         pMP->UpdateNormalAndDepth();
     }
+
 }
