@@ -25,8 +25,8 @@ void LocalMapping::Run() {
 
             CreateNewMapPoints();
 
-            if(!CheckNewKeyFrames())
-                SearchInNeighbors();
+//            if(!CheckNewKeyFrames())
+            SearchInNeighbors();
 
             mbAbortBA = false;
 
@@ -144,20 +144,19 @@ void LocalMapping::CreateNewMapPoints() {
             vDepthIdx.emplace_back(std::make_pair(z, i));
     }
 
+    int nPoints = 0;
     if(!vDepthIdx.empty()){
         sort(vDepthIdx.begin(), vDepthIdx.end());
 
-        int nPoints = 0;
         for(auto& item : vDepthIdx){
             int idx = item.second;
 
             bool bCreateNew = false;
 
             std::shared_ptr<MapPoint> pMP = mpCurrentKeyFrame->GetMapPoint(idx);
-            // 这里可以直接看该点是否是坏点
             if(!pMP)
                 bCreateNew = true;
-            else if(pMP->isBad()){
+            else if(pMP->Observations()<1){
                 bCreateNew = true;
                 mpCurrentKeyFrame->EraseMapPointMatch(idx);
             }
@@ -172,13 +171,14 @@ void LocalMapping::CreateNewMapPoints() {
                 mpMap->AddMapPoint(pNewMP);
 
                 mlpRecentAddedMapPoints.push_back(pNewMP);
+                nPoints++;
             }
-            nPoints++;
             // TODO 这里增加多少个地图点合适
-            if(item.first > mpCurrentKeyFrame->mThDepth && nPoints > 100)
+            if(nPoints > 100 && item.first > mpCurrentKeyFrame->mThDepth)
                 break;
         }
     }
+    LOG(INFO) << "Create new " << nPoints << " map points" << std::endl;
 }
 
 // 检查新添加的地图点
@@ -244,14 +244,17 @@ void LocalMapping::SearchInNeighbors() {
     matcher.Fuse(mpCurrentKeyFrame, vpFuseCandidates);
 
     vpMapPointMatches = mpCurrentKeyFrame->GetMapPointMatches();
+    int npoints = 0;
     for(auto& pMP : vpMapPointMatches){
         if(pMP){
             if(!pMP->isBad()){
                 pMP->ComputeDistinctiveDescriptors();
                 pMP->UpdateNormalAndDepth();
+                npoints++;
             }
         }
     }
+    LOG(INFO) << "Current key frame matched map points: " << npoints << std::endl;
 
     mpCurrentKeyFrame->UpdateConnections();
 

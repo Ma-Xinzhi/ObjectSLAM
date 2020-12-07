@@ -15,6 +15,7 @@
 class Map{
 public:
     Map();
+
     void AddQuadric(const std::shared_ptr<g2o::Quadric>& pQuadric);
     std::vector<std::shared_ptr<g2o::Quadric>> GetAllQuadric();
 

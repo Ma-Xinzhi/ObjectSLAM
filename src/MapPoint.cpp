@@ -144,7 +144,7 @@ void MapPoint::Replace(const std::shared_ptr<MapPoint>& pMP) {
     for(const auto& ob : obs){
         std::shared_ptr<KeyFrame> pKF = ob.first;
 
-        if(pMP->IsInKeyFrame(pKF)){
+        if(!pMP->IsInKeyFrame(pKF)){
             pKF->ReplaceMapPointMatch(ob.second, pMP);
             pMP->AddObservation(pKF, ob.second);
         }else

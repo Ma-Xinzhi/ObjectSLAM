@@ -187,7 +187,7 @@ void Tracking::Track() {
             if(mpLastFrame){
                 Eigen::Matrix4d Twl = mpLastFrame->GetPose();
                 Eigen::Matrix4d Twc = mpCurrentFrame->GetPose();
-                mVelocity = Twl.reverse()*Twc;
+                mVelocity = Twl.inverse()*Twc;
                 mbVelocity = true;
             }
             else{
@@ -210,6 +210,12 @@ void Tracking::Track() {
             if(NeedNewKeyFrame())
                 CreateNewKeyFrame();
 
+            // We allow points with high innovation (considererd outliers by the Huber Function)
+            // pass to the new keyframe, so that bundle adjustment will finally decide
+            // if they are outliers or not. We don't want next frame to estimate its position
+            // with those points so we discard them in the frame.
+            // 大致意思就是当前帧中的检测出的outlier是否作为outlier，由构建的关键帧local BA决定，所以可以直接构建，传给LocalMapping
+            // 为了避免下一帧根据当前帧的outlier点进行跟踪，将其舍弃
             for (int i = 0; i < mpCurrentFrame->N; ++i) {
                 if(mpCurrentFrame->mvpMapPoints[i] && mpCurrentFrame->mvbOutlier[i])
                     mpCurrentFrame->mvpMapPoints[i] = nullptr;
@@ -223,7 +229,7 @@ void Tracking::Track() {
 
     // 这里是存储信息，用于后面恢复完整的相机轨迹
     Eigen::Matrix4d Twc = mpCurrentFrame->GetPose();
-    mlRelativeFramePoses.emplace_back(mpReferenceKF->GetPose().inverse()*Twc);
+    mlRelativeFramePoses.emplace_back(mpCurrentFrame->mpReferenceKF->GetPose().inverse()*Twc);
     mlpReferences.push_back(mpReferenceKF);
     mlFrameTimes.push_back(mpCurrentFrame->mTimeStamp);
     mlbLost.push_back(mState == LOST);
@@ -315,6 +321,8 @@ void Tracking::StereoInitialization() {
 
         mpLocalMapping->InsertKeyFrame(pKFinit);
 
+        mpCurrentFrame->mpReferenceKF = pKFinit;
+
         mpLastFrame = mpCurrentFrame;
         mpLastKeyFrame = pKFinit;
         mnLastKeyFrameId = pKFinit->mnId;
@@ -322,7 +330,6 @@ void Tracking::StereoInitialization() {
         mvpLocalKeyFrames.push_back(pKFinit);
         mvpLocalMapPoints = mpMap->GetAllMapPoints();
         mpReferenceKF = pKFinit;
-        mpCurrentFrame->mpReferenceKF = pKFinit;
 
         mpMap->SetReferenceMapPoints(mvpLocalMapPoints);
         mpMap->mvpKeyFrameOrigins.push_back(pKFinit);
@@ -336,7 +343,8 @@ void Tracking::StereoInitialization() {
 void Tracking::CheckReplacedInLastFrame() {
     for (int i = 0; i < mpLastFrame->N; ++i) {
         std::shared_ptr<MapPoint> pMP = mpLastFrame->mvpMapPoints[i];
-        if(pMP){
+        if(pMP)
+        {
             std::shared_ptr<MapPoint> pRep = pMP->GetReplaced();
             if(pRep)
                 mpLastFrame->mvpMapPoints[i] = pRep;
@@ -365,15 +373,20 @@ bool Tracking::TrackReferenceKeyFrame() {
 //    }
 }
 
+// 根据上一帧的参考关键帧优化的位姿，对上一帧的位姿信息进行更新
+// 再根据速度信息，估计当前帧的位姿，进行匹配
 bool Tracking::TrackWithMotionModel() {
     ORBmatcher matcher(0.9, true);
-    // TODO 这里的意思应该是关键帧的位姿会进行优化，所以存储相对位姿，再根据优化更新上一帧的位姿，先省略
+    /// 这里的意思应该是关键帧的位姿会进行优化，所以存储相对位姿，再根据优化更新上一帧的位姿，先省略
     UpdateLastFrame();
+
+    LOG(INFO) << "Velocity:\n" << mVelocity << std::endl;
+
     mpCurrentFrame->SetPose(mpLastFrame->GetPose()*mVelocity);
     // 这里似乎没有必要
     std::fill(mpCurrentFrame->mvpMapPoints.begin(), mpCurrentFrame->mvpMapPoints.end(), nullptr);
 
-    int th = 7;
+    int th = 15;
 
     int nmatches = matcher.SearchByProjection(mpCurrentFrame, mpLastFrame, th, false);
 
@@ -403,6 +416,7 @@ bool Tracking::TrackWithMotionModel() {
         }
     }
     LOG(INFO) << "Track " << nmatchesMap << " points from last frame" << std::endl;
+
     return nmatchesMap >= 10;
 }
 
@@ -587,7 +601,8 @@ void Tracking::SearchLocalPoints() {
     if(nToMatch > 0){
         ORBmatcher matcher(0.8);
         int th = 3;
-        matcher.SearchByProjection(mpCurrentFrame, mvpLocalMapPoints, th);
+        int nmatchs = matcher.SearchByProjection(mpCurrentFrame, mvpLocalMapPoints, th);
+        LOG(INFO) << "Match Local MapPoints " << nmatchs;
     }
 }
 

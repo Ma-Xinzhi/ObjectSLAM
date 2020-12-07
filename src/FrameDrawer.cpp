@@ -3,7 +3,7 @@
 
 #include <opencv2/core/eigen.hpp>
 
-FrameDrawer::FrameDrawer(const std::shared_ptr<Map> &pmap): mpMap(pmap) {}
+FrameDrawer::FrameDrawer(const std::shared_ptr<Map> &pmap): mpMap(pmap), mnTracked(0), mnTrackedVO(0) {}
 
 cv::Mat FrameDrawer::DrawFrame() {
     cv::Mat img;
@@ -34,22 +34,24 @@ cv::Mat FrameDrawer::DrawFrame() {
         float r = 5;
         int n = vCurrentKeys.size();
         for (int i = 0; i < n; ++i) {
-            cv::Point2f pt1, pt2;
-            pt1.x = vCurrentKeys[i].pt.x-r;
-            pt1.y = vCurrentKeys[i].pt.y-r;
-            pt2.x = vCurrentKeys[i].pt.x+r;
-            pt2.y = vCurrentKeys[i].pt.y+r;
-            // 与地图中的地图点相关联的特征点
-            if(vbMap[i]){
-                cv::rectangle(img, pt1, pt2, cv::Scalar(0,255,0));
-                cv::circle(img, vCurrentKeys[i].pt, 2, cv::Scalar(0,255,0), -1);
-                mnTracked++;
-            }
-            // 与上一帧中创建的地图点相关联的特征点，感觉这里在实际中不会出现，地图点一旦被创建都是增加观测信息的
-            else{
-                cv::rectangle(img, pt1, pt2, cv::Scalar(0,0,255));
-                cv::circle(img, vCurrentKeys[i].pt, 2, cv::Scalar(0,0,255), -1);
-                mnTrackedVO++;
+            if(vbVO[i] || vbMap[i]){
+                cv::Point2f pt1, pt2;
+                pt1.x = vCurrentKeys[i].pt.x-r;
+                pt1.y = vCurrentKeys[i].pt.y-r;
+                pt2.x = vCurrentKeys[i].pt.x+r;
+                pt2.y = vCurrentKeys[i].pt.y+r;
+                // 与地图中的地图点相关联的特征点
+                if(vbMap[i]){
+                    cv::rectangle(img, pt1, pt2, cv::Scalar(0,255,0));
+                    cv::circle(img, vCurrentKeys[i].pt, 2, cv::Scalar(0,255,0), -1);
+                    mnTracked++;
+                }
+                // 与上一帧中创建的地图点相关联的特征点，感觉这里在实际中不会出现，地图点一旦被创建都是增加观测信息的
+                else{
+                    cv::rectangle(img, pt1, pt2, cv::Scalar(0,0,255));
+                    cv::circle(img, vCurrentKeys[i].pt, 2, cv::Scalar(0,0,255), -1);
+                    mnTrackedVO++;
+                }
             }
         }
     }
@@ -87,22 +89,24 @@ cv::Mat FrameDrawer::DrawFrameAll() {
         float r = 5;
         int n = vCurrentKeys.size();
         for (int i = 0; i < n; ++i) {
-            cv::Point2f pt1, pt2;
-            pt1.x = vCurrentKeys[i].pt.x-r;
-            pt1.y = vCurrentKeys[i].pt.y-r;
-            pt2.x = vCurrentKeys[i].pt.x+r;
-            pt2.y = vCurrentKeys[i].pt.y+r;
-            // 与地图中的地图点相关联的特征点
-            if(vbMap[i]){
-                cv::rectangle(img, pt1, pt2, cv::Scalar(0,255,0));
-                cv::circle(img, vCurrentKeys[i].pt, 2, cv::Scalar(0,255,0), -1);
-                mnTracked++;
-            }
-                // 与上一帧中创建的地图点相关联的特征点，感觉这里在实际中不会出现，地图点一旦被创建都是增加观测信息的
-            else{
-                cv::rectangle(img, pt1, pt2, cv::Scalar(0,0,255));
-                cv::circle(img, vCurrentKeys[i].pt, 2, cv::Scalar(0,0,255), -1);
-                mnTrackedVO++;
+            if(vbVO[i] || vbMap[i]){
+                cv::Point2f pt1, pt2;
+                pt1.x = vCurrentKeys[i].pt.x-r;
+                pt1.y = vCurrentKeys[i].pt.y-r;
+                pt2.x = vCurrentKeys[i].pt.x+r;
+                pt2.y = vCurrentKeys[i].pt.y+r;
+                // 与地图中的地图点相关联的特征点
+                if(vbMap[i]){
+                    cv::rectangle(img, pt1, pt2, cv::Scalar(0,255,0));
+                    cv::circle(img, vCurrentKeys[i].pt, 2, cv::Scalar(0,255,0), -1);
+                    mnTracked++;
+                }
+                    // 与上一帧中创建的地图点相关联的特征点，感觉这里在实际中不会出现，地图点一旦被创建都是增加观测信息的
+                else{
+                    cv::rectangle(img, pt1, pt2, cv::Scalar(0,0,255));
+                    cv::circle(img, vCurrentKeys[i].pt, 2, cv::Scalar(0,0,255), -1);
+                    mnTrackedVO++;
+                }
             }
         }
     }

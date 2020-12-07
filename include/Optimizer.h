@@ -12,7 +12,7 @@ class Optimizer{
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 
-    static void LocalBundleAdjustment(const std::shared_ptr<KeyFrame>& pKF, bool* pbStopFlag, std::shared_ptr<Map> pMap);
+    static void LocalBundleAdjustment(const std::shared_ptr<KeyFrame>& pKF, bool* pbStopFlag, const std::shared_ptr<Map>& pMap);
 
     static int PoseOptimization(const std::shared_ptr<Frame>& pFrame);
 

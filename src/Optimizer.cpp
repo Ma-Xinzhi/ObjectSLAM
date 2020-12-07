@@ -144,7 +144,7 @@ g2o::SE3Quat Optimizer::toSE3Quat(const Eigen::Matrix4d &pose) {
     return g2o::SE3Quat(R, t);
 }
 
-void Optimizer::LocalBundleAdjustment(const std::shared_ptr<KeyFrame>& pKF, bool *pbStopFlag, std::shared_ptr<Map> pMap) {
+void Optimizer::LocalBundleAdjustment(const std::shared_ptr<KeyFrame>& pKF, bool *pbStopFlag, const std::shared_ptr<Map>& pMap) {
     std::list<std::shared_ptr<KeyFrame>> lLocalKeyFrames;
 
     lLocalKeyFrames.push_back(pKF);

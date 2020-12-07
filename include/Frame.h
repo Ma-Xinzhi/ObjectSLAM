@@ -7,6 +7,7 @@
 #include <opencv2/core.hpp>
 #include <memory>
 #include <vector>
+#include <iostream>
 
 #define FRAME_GRID_ROWS 48
 #define FRAME_GRID_COLS 64

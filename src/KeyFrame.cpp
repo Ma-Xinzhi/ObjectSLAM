@@ -337,6 +337,7 @@ void KeyFrame::SetBadFlag() {
     }
     for(auto& item : mConnectedKeyFrameWeights)
         item.first->EraseConnection(shared_from_this());
+
     {
         std::unique_lock<std::mutex> lk(mMutexConnections);
         std::unique_lock<std::mutex> lk1(mMutexFeatures);
