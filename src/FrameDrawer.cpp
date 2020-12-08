@@ -56,8 +56,10 @@ cv::Mat FrameDrawer::DrawFrame() {
         }
     }
 
+    cv::Mat imText;
+    DrawTextInfoOnImage(img, state, imText);
 //    DrawObservationOnImage(img);
-    return img;
+    return imText;
 }
 
 cv::Mat FrameDrawer::DrawFrameAll() {
@@ -114,6 +116,28 @@ cv::Mat FrameDrawer::DrawFrameAll() {
     DrawObservationOnImage(img);
     DrawProjectionOnImage(img);
     return img;
+}
+
+void FrameDrawer::DrawTextInfoOnImage(cv::Mat &img, int state, cv::Mat& imText) {
+    std::stringstream s;
+    if(state == Tracking::NOT_INITIALIZED)
+        s << " TRYING TO INITIALIZE ";
+    else if(state == Tracking::OK){
+        s << "SLAM MODE |  ";
+        int nKFs = mpMap->KeyFramesInMap();
+        int nMPs = mpMap->MapPointsInMap();
+        s << "KFs: " << nKFs << ", MPs: " << nMPs << ", Matches: " << mnTracked;
+    }
+    else if(state == Tracking::LOST)
+        s << " TRACK LOST... ";
+
+    int baseline = 0;
+    cv::Size textSize = cv::getTextSize(s.str(), cv::FONT_HERSHEY_PLAIN, 1, 1, &baseline);
+
+    imText = cv::Mat(img.rows+textSize.height+10, img.cols, img.type());
+    img.copyTo(imText.rowRange(0, img.rows).colRange(0, img.cols));
+    imText.rowRange(img.rows, imText.rows) = cv::Mat::zeros(textSize.height+10, img.cols, img.type());
+    cv::putText(imText, s.str(), cv::Point(5, imText.rows-5), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 1, 8);
 }
 
 void FrameDrawer::DrawObservationOnImage(cv::Mat& img) {

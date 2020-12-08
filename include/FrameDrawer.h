@@ -19,6 +19,7 @@ public:
     cv::Mat DrawFrameAll();
 
 private:
+    void DrawTextInfoOnImage(cv::Mat& img, int state, cv::Mat& imText);
     void DrawObservationOnImage(cv::Mat& img);
     void DrawProjectionOnImage(cv::Mat& img);
 

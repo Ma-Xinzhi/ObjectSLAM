@@ -25,8 +25,8 @@ void LocalMapping::Run() {
 
             CreateNewMapPoints();
 
-//            if(!CheckNewKeyFrames())
-            SearchInNeighbors();
+            if(!CheckNewKeyFrames())
+                SearchInNeighbors();
 
             mbAbortBA = false;
 
@@ -135,6 +135,9 @@ void LocalMapping::MapPointCulling() {
 }
 
 void LocalMapping::CreateNewMapPoints() {
+
+    if(mpCurrentKeyFrame->mnId == 0)
+        return;
 
     std::vector<std::pair<float, int>> vDepthIdx;
     vDepthIdx.reserve(mpCurrentKeyFrame->N);

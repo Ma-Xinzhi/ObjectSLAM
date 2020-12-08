@@ -197,15 +197,15 @@ void Tracking::Track() {
 
             mpMapDrawer->SetCurrentCameraPose(mpCurrentFrame->GetPose());
 
-            for (int i = 0; i < mpCurrentFrame->N; ++i) {
-                std::shared_ptr<MapPoint> pMP = mpCurrentFrame->mvpMapPoints[i];
-                if(pMP){
-                    if(pMP->Observations() < 1){
-                        mpCurrentFrame->mvbOutlier[i] = false;
-                        mpCurrentFrame->mvpMapPoints[i] = nullptr;
-                    }
-                }
-            }
+//            for (int i = 0; i < mpCurrentFrame->N; ++i) {
+//                std::shared_ptr<MapPoint> pMP = mpCurrentFrame->mvpMapPoints[i];
+//                if(pMP){
+//                    if(pMP->Observations() < 1){
+//                        mpCurrentFrame->mvbOutlier[i] = false;
+//                        mpCurrentFrame->mvpMapPoints[i] = nullptr;
+//                    }
+//                }
+//            }
 
             if(NeedNewKeyFrame())
                 CreateNewKeyFrame();
@@ -379,8 +379,6 @@ bool Tracking::TrackWithMotionModel() {
     ORBmatcher matcher(0.9, true);
     /// 这里的意思应该是关键帧的位姿会进行优化，所以存储相对位姿，再根据优化更新上一帧的位姿，先省略
     UpdateLastFrame();
-
-    LOG(INFO) << "Velocity:\n" << mVelocity << std::endl;
 
     mpCurrentFrame->SetPose(mpLastFrame->GetPose()*mVelocity);
     // 这里似乎没有必要
