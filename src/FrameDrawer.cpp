@@ -1,27 +1,143 @@
 #include "FrameDrawer.h"
-#include "Track.h"
+#include "Tracking.h"
 
-FrameDrawer::FrameDrawer(const std::shared_ptr<Map> &pmap): mpMap(pmap) {}
+#include <opencv2/core/eigen.hpp>
+
+FrameDrawer::FrameDrawer(const std::shared_ptr<Map> &pmap): mpMap(pmap), mnTracked(0), mnTrackedVO(0) {}
 
 cv::Mat FrameDrawer::DrawFrame() {
     cv::Mat img;
+    std::vector<cv::KeyPoint> vCurrentKeys;
+    std::vector<bool> vbVO, vbMap;
+    int state;
     {
         std::unique_lock<std::mutex> lk(mMutex);
         mImg.copyTo(img);
+
+        state = mState;
+
+        if(mState == Tracking::SYSTEM_NOT_READY)
+            mState = Tracking::NO_IMAGES_YET;
+
+        if(mState == Tracking::OK){
+            vCurrentKeys = mvCurrentKeys;
+            vbVO = mvbVO;
+            vbMap = mvbMap;
+        }
+        else if(mState == Tracking::LOST)
+            vCurrentKeys = mvCurrentKeys;
     }
-    DrawObservationOnImage(img);
-    return img;
+
+    if(state == Tracking::OK){
+        mnTracked = 0;
+        mnTrackedVO = 0;
+        float r = 5;
+        int n = vCurrentKeys.size();
+        for (int i = 0; i < n; ++i) {
+            if(vbVO[i] || vbMap[i]){
+                cv::Point2f pt1, pt2;
+                pt1.x = vCurrentKeys[i].pt.x-r;
+                pt1.y = vCurrentKeys[i].pt.y-r;
+                pt2.x = vCurrentKeys[i].pt.x+r;
+                pt2.y = vCurrentKeys[i].pt.y+r;
+                // 与地图中的地图点相关联的特征点
+                if(vbMap[i]){
+                    cv::rectangle(img, pt1, pt2, cv::Scalar(0,255,0));
+                    cv::circle(img, vCurrentKeys[i].pt, 2, cv::Scalar(0,255,0), -1);
+                    mnTracked++;
+                }
+                // 与上一帧中创建的地图点相关联的特征点，感觉这里在实际中不会出现，地图点一旦被创建都是增加观测信息的
+                else{
+                    cv::rectangle(img, pt1, pt2, cv::Scalar(0,0,255));
+                    cv::circle(img, vCurrentKeys[i].pt, 2, cv::Scalar(0,0,255), -1);
+                    mnTrackedVO++;
+                }
+            }
+        }
+    }
+
+    cv::Mat imText;
+    DrawTextInfoOnImage(img, state, imText);
+//    DrawObservationOnImage(img);
+    return imText;
 }
 
 cv::Mat FrameDrawer::DrawFrameAll() {
     cv::Mat img;
+    std::vector<cv::KeyPoint> vCurrentKeys;
+    std::vector<bool> vbVO, vbMap;
+    int state;
     {
         std::unique_lock<std::mutex> lk(mMutex);
         mImg.copyTo(img);
+
+        state = mState;
+
+        if(mState == Tracking::SYSTEM_NOT_READY)
+            mState = Tracking::NO_IMAGES_YET;
+
+        if(mState == Tracking::OK){
+            vCurrentKeys = mvCurrentKeys;
+            vbVO = mvbVO;
+            vbMap = mvbMap;
+        }
+        else if(mState == Tracking::LOST)
+            vCurrentKeys = mvCurrentKeys;
     }
+
+    if(state == Tracking::OK){
+        mnTracked = 0;
+        mnTrackedVO = 0;
+        float r = 5;
+        int n = vCurrentKeys.size();
+        for (int i = 0; i < n; ++i) {
+            if(vbVO[i] || vbMap[i]){
+                cv::Point2f pt1, pt2;
+                pt1.x = vCurrentKeys[i].pt.x-r;
+                pt1.y = vCurrentKeys[i].pt.y-r;
+                pt2.x = vCurrentKeys[i].pt.x+r;
+                pt2.y = vCurrentKeys[i].pt.y+r;
+                // 与地图中的地图点相关联的特征点
+                if(vbMap[i]){
+                    cv::rectangle(img, pt1, pt2, cv::Scalar(0,255,0));
+                    cv::circle(img, vCurrentKeys[i].pt, 2, cv::Scalar(0,255,0), -1);
+                    mnTracked++;
+                }
+                    // 与上一帧中创建的地图点相关联的特征点，感觉这里在实际中不会出现，地图点一旦被创建都是增加观测信息的
+                else{
+                    cv::rectangle(img, pt1, pt2, cv::Scalar(0,0,255));
+                    cv::circle(img, vCurrentKeys[i].pt, 2, cv::Scalar(0,0,255), -1);
+                    mnTrackedVO++;
+                }
+            }
+        }
+    }
+
     DrawObservationOnImage(img);
     DrawProjectionOnImage(img);
     return img;
+}
+
+void FrameDrawer::DrawTextInfoOnImage(cv::Mat &img, int state, cv::Mat& imText) {
+    std::stringstream s;
+    if(state == Tracking::NOT_INITIALIZED)
+        s << " TRYING TO INITIALIZE ";
+    else if(state == Tracking::OK){
+        s << "SLAM MODE |  ";
+        int nKFs = mpMap->KeyFramesInMap();
+        int nMPs = mpMap->MapPointsInMap();
+        s << "KFs: " << nKFs << ", MPs: " << nMPs << ", Matches: " << mnTracked;
+    }
+    else if(state == Tracking::LOST)
+        s << " TRACK LOST... ";
+
+    int baseline = 0;
+    cv::Size textSize = cv::getTextSize(s.str(), cv::FONT_HERSHEY_PLAIN, 1, 1, &baseline);
+
+    imText = cv::Mat(img.rows+textSize.height+10, img.cols, img.type());
+    img.copyTo(imText.rowRange(0, img.rows).colRange(0, img.cols));
+    imText.rowRange(img.rows, imText.rows) = cv::Mat::zeros(textSize.height+10, img.cols, img.type());
+    cv::putText(imText, s.str(), cv::Point(5, imText.rows-5), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 1, 8);
 }
 
 void FrameDrawer::DrawObservationOnImage(cv::Mat& img) {
@@ -30,18 +146,23 @@ void FrameDrawer::DrawObservationOnImage(cv::Mat& img) {
         int label = ob->mLabel;
         cv::Rect rect(cv::Point(bbox[0], bbox[1]), cv::Point(bbox[2], bbox[3]));
         cv::rectangle(img, rect, cv::Scalar(0,0,255),2);
-        cv::putText(img, std::to_string(label), cv::Point(bbox[0], bbox[1]), CV_FONT_HERSHEY_SIMPLEX, 1.5, cv::Scalar(0,255,0), 2);
+        cv::putText(img, std::to_string(label), cv::Point(bbox[0], bbox[1]), CV_FONT_HERSHEY_PLAIN, 1.5, cv::Scalar(0,255,0), 2);
     }
 }
 
 void FrameDrawer::DrawProjectionOnImage(cv::Mat& img) {
     std::vector<std::shared_ptr<g2o::Quadric>> quadrics = mpMap->GetAllQuadric();
     for(const auto& quadric : quadrics){
-        g2o::SE3Quat pose = mpCurrentFrame->GetPose();
+        Eigen::Matrix4d Twc = mpCurrentFrame->GetPose();
+        Eigen::Matrix3d R = Twc.block(0,0,3,3);
+        Eigen::Vector3d t = Twc.col(3).head(3);
+        g2o::SE3Quat pose(R,t);
         if(quadric->CheckObservability(pose)){
+            Eigen::Matrix3d Calib;
+            cv::cv2eigen(mK, Calib);
             // 两种方式求解投影的bounding box
-//            Eigen::Vector4d rect = quadric->ProjectOntoImageRectByEquation(pose, mCalib);
-            Vector5d ellipse = quadric->ProjectOntoImageEllipse(pose, mCalib);
+//            Eigen::Vector4d rect = quadric->ProjectOntoImageRectByEquation(pose, Calib);
+            Vector5d ellipse = quadric->ProjectOntoImageEllipse(pose, Calib);
             double angle = ellipse[4] * 180 / M_PI;
             // 这里的角度是度数单位，并且是顺时针旋转，计算的时候是按照逆时针旋转计算，需要取个反
             cv::ellipse(img, cv::Point(ellipse[0], ellipse[1]), cv::Size(ellipse[2], ellipse[3]),
@@ -52,10 +173,32 @@ void FrameDrawer::DrawProjectionOnImage(cv::Mat& img) {
     }
 }
 
-void FrameDrawer::Update(Track *ptrack) {
+void FrameDrawer::Update(Tracking* pTracker) {
     std::unique_lock<std::mutex> lk(mMutex);
-    ptrack->GetCurrentImage().copyTo(mImg);
-    mpCurrentFrame = ptrack->GetCurrentFrame();
-    mvpObservation = ptrack->GetCurrentFrame()->GetDetectionResults();
-    mCalib = ptrack->GetCalib();
+    pTracker->mCurImg.copyTo(mImg);
+
+    mK = pTracker->GetK();
+
+    mpCurrentFrame = pTracker->mpCurrentFrame;
+    mvpObservation = mpCurrentFrame->GetDetectionResults();
+    mvCurrentKeys = mpCurrentFrame->mvKeys;
+    N = mvCurrentKeys.size();
+    mvbMap = std::vector<bool>(N, false);
+    mvbVO = std::vector<bool>(N, false);
+
+    if(pTracker->mLastProcessedState == Tracking::OK){
+        for(int i=0; i<N; ++i){
+            std::shared_ptr<MapPoint> pMP = mpCurrentFrame->mvpMapPoints[i];
+            if(pMP){
+                if(!mpCurrentFrame->mvbOutlier[i]){
+                    if(pMP->Observations()>0)
+                        mvbMap[i] = true;
+                    else
+                        mvbVO[i] = true;
+                }
+            }
+        }
+    }
+
+    mState = pTracker->mLastProcessedState;
 }

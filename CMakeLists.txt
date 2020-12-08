@@ -4,7 +4,7 @@ project(ObjectSLAM)
 #SET(CMAKE_BUILD_TYPE Release)
 #MESSAGE("Build type: " ${CMAKE_BUILD_TYPE})
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated")
 
 LIST(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
@@ -46,11 +46,18 @@ add_library(${PROJECT_NAME} SHARED
         src/FrameDrawer.cpp
         src/Map.cpp
         src/Frame.cpp
-        src/Track.cpp
+        src/Tracking.cpp
         src/BasicQuadricEdges.cpp
         src/InitializeQuadric.cpp
         src/System.cpp
-        src/Dataset.cpp)
+        src/Dataset.cpp
+        src/Detector.cpp
+        src/ORBextractor.cpp
+        src/MapPoint.cpp
+        src/KeyFrame.cpp
+        src/ORBmatcher.cpp
+        src/Optimizer.cpp
+        src/LocalMapping.cpp)
 
 set(THIRD_PARTY_LIBS
         ${OpenCV_LIBS}

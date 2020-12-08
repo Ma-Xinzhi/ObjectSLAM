@@ -39,8 +39,6 @@ namespace g2o {
   inline Vector3d project(const Vector4d&);
   inline Vector3d unproject(const Vector2d&);
   inline Vector4d unproject(const Vector3d&);
-  inline Eigen::Quaterniond zyx_euler_to_quat(const double &roll, const double &pitch, const double &yaw);
-  inline void quat_to_euler_zyx(const Eigen::Quaterniond q, double& roll, double& pitch, double& yaw);
 
 #include "se3_ops.hpp"
 

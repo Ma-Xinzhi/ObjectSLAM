@@ -3,16 +3,31 @@
 System::System(const std::string &strSettingsFile) {
     LOG(INFO) << "ObjectSLAM Project" << std::endl;
 
+    cv::FileStorage fsSettings(strSettingsFile.c_str(), cv::FileStorage::READ);
+    if(!fsSettings.isOpened()){
+        LOG(ERROR) << "Fail to open settings file..." << std::endl;
+        fsSettings.release();
+        exit(-1);
+    }
+    fsSettings.release();
+
     mpMap = std::make_shared<Map>();
 
     mpFrameDrawer = std::make_shared<FrameDrawer>(mpMap);
-
     mpMapDrawer = std::make_shared<MapDrawer>(strSettingsFile, mpMap);
 
-    mpTrack = std::make_shared<Track>(strSettingsFile, mpMap, mpMapDrawer, mpFrameDrawer);
+    mpTracker = std::make_unique<Tracking>(strSettingsFile, mpMap, mpMapDrawer, mpFrameDrawer);
 
-    mpViewer = std::make_shared<Viewer>(strSettingsFile, mpMapDrawer, mpFrameDrawer);
+    mpLocalMapper = std::make_shared<LocalMapping>(mpMap);
+    mtLocalMapping = std::thread(&LocalMapping::Run, mpLocalMapper);
 
+    mpViewer = std::make_unique<Viewer>(strSettingsFile, mpMapDrawer, mpFrameDrawer);
+
+    mpTracker->SetLocalMapper(mpLocalMapper);
+}
+
+System::~System() {
+    mtLocalMapping.join();
 }
 
 void System::TrackWithSingleObject(const Eigen::VectorXd &pose, const Eigen::VectorXd &detection, const cv::Mat &im) {
@@ -24,7 +39,7 @@ void System::TrackWithSingleObject(const Eigen::VectorXd &pose, const Eigen::Vec
     ob_ptr->mBbox = detection.head(4);
     ob_ptr->mLabel = detection[4];
     ob_ptr->mProb = detection[5];
-    mpTrack->GrabPoseAndSingleObject(pose_se3, ob_ptr, im);
+    mpTracker->GrabPoseAndSingleObject(pose_se3, ob_ptr, im);
 }
 
 void System::TrackWithObjects(const Eigen::VectorXd &pose, const std::vector<Eigen::VectorXd> &detections,
@@ -43,12 +58,19 @@ void System::TrackWithObjects(const Eigen::VectorXd &pose, const std::vector<Eig
         obs.push_back(ob_ptr);
     }
     // TODO 检测框很多的情况
-    mpTrack->GrabPoseAndObjects(pose_se3, obs, im);
+    mpTracker->GrabPoseAndObjects(pose_se3, obs, im);
+}
+
+void System::TrackRGBD(const cv::Mat &img, const cv::Mat &depthmap, const double &timestamp) {
+    mpTracker->GrabRGBDImage(img, depthmap, timestamp);
 }
 
 void System::ShutDown() {
     mpViewer->RequestFinish();
     while(!mpViewer->IsFinished())
+        usleep(5000);
+    mpLocalMapper->RequestFinish();
+    while(!mpLocalMapper->isFinished())
         usleep(5000);
     pangolin::BindToContext("Map Viewer");
 }

@@ -182,7 +182,6 @@ namespace g2o {
   typedef BlockSolver< BlockSolverTraits<6, 3> > BlockSolver_6_3;  
   // solver fo BA with scale
   typedef BlockSolver< BlockSolverTraits<7, 3> > BlockSolver_7_3;  
-  typedef BlockSolver< BlockSolverTraits<6, 9> > BlockSolver_6_9;  
   // 2Dof landmarks 3Dof poses
   typedef BlockSolver< BlockSolverTraits<3, 2> > BlockSolver_3_2;
 

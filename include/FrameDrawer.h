@@ -7,18 +7,19 @@
 #include "Map.h"
 #include "Frame.h"
 
-class Track;
+class Tracking;
 class FrameDrawer{
 public:
     FrameDrawer(const std::shared_ptr<Map>& pmap);
 
-    void Update(Track* ptrack);
+    void Update(Tracking* pTracker);
 
     cv::Mat DrawFrame();
     // 显示检测框，投影椭圆和框
     cv::Mat DrawFrameAll();
 
 private:
+    void DrawTextInfoOnImage(cv::Mat& img, int state, cv::Mat& imText);
     void DrawObservationOnImage(cv::Mat& img);
     void DrawProjectionOnImage(cv::Mat& img);
 
@@ -29,8 +30,16 @@ private:
     std::shared_ptr<Frame> mpCurrentFrame;
 
     cv::Mat mImg;
+    int N;
+    std::vector<cv::KeyPoint> mvCurrentKeys;
+    std::vector<bool> mvbMap, mvbVO;
+    int mnTracked, mnTrackedVO;
+    std::vector<cv::KeyPoint> mvIniKeys;
+    std::vector<int> mvIniMatches;
+    int mState;
+
     Observations mvpObservation;
-    Eigen::Matrix3d mCalib;
+    cv::Mat mK;
 };
 
 #endif //OBJECTSLAM_FRAMEDRAWER_H
