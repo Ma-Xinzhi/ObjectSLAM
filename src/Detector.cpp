@@ -76,19 +76,19 @@ cv::Scalar Detector::obj_id_to_color(int obj_id) {
 void Detector::draw_boxes(cv::Mat mat_img, const std::vector<Object>& result_vec, const std::vector<std::string>& obj_names)
 {
     for (auto &i : result_vec) {
-        cv::Scalar color = obj_id_to_color(i.object_id);
-        cv::rectangle(mat_img, i.rect, color, 2);
-        if (obj_names.size() > i.object_id) {
+        if (i.prob> 0.5) {
+            cv::Scalar color = obj_id_to_color(i.object_id);
+            cv::rectangle(mat_img, i.rect, color, 1);
             std::string obj_name = obj_names[i.object_id];
-            cv::Size const text_size = getTextSize(obj_name, cv::FONT_HERSHEY_COMPLEX_SMALL, 1.2, 2, 0);
+            cv::Size const text_size = getTextSize(obj_name, cv::FONT_HERSHEY_PLAIN, 1.2, 2, 0);
             int max_width = (text_size.width > i.rect.width + 2) ? text_size.width : (i.rect.width + 2);
             max_width = std::max(max_width, (int)i.rect.width + 2);
             //max_width = std::max(max_width, 283);
 
-            cv::rectangle(mat_img, cv::Point2f(std::max((int)i.rect.x - 1, 0), std::max((int)i.rect.y - 35, 0)),
-                          cv::Point2f(std::min((int)i.rect.x + max_width, mat_img.cols - 1), std::min((int)i.rect.y, mat_img.rows - 1)),
-                          color, CV_FILLED, 8, 0);
-            putText(mat_img, obj_name, cv::Point2f(i.rect.x, i.rect.y - 16), cv::FONT_HERSHEY_COMPLEX_SMALL, 1.2, cv::Scalar(0, 0, 0), 2);
+//            cv::rectangle(mat_img, cv::Point2f(std::max((int)i.rect.x - 1, 0), std::max((int)i.rect.y - 35, 0)),
+//                          cv::Point2f(std::min((int)i.rect.x + max_width, mat_img.cols - 1), std::min((int)i.rect.y, mat_img.rows - 1)),
+//                          color, 1, 8, 0);
+            cv::putText(mat_img, obj_name, cv::Point2f(i.rect.x, i.rect.y - 6), cv::FONT_HERSHEY_PLAIN, 1.2, color, 2);
         }
     }
 }
