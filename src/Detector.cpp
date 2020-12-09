@@ -1,14 +1,12 @@
-/*
-* 2d目标检测
-*/
+#include "Detector.h"
+
 #include <cmath>
 #include <iomanip>
 #include <fstream>
 
-#include "Detector.h"
+#include <glog/logging.h>
 
-
-std::vector<bbox_t> Detector::detect_resized(image_t img, int init_w, int init_h, float thresh, bool use_mean)
+std::vector<bbox_t> Detector::DetectResized(image_t img, int init_w, int init_h, float thresh, bool use_mean)
 {
     if (img.data == NULL)
         throw std::runtime_error("Image is empty");
@@ -18,29 +16,31 @@ std::vector<bbox_t> Detector::detect_resized(image_t img, int init_w, int init_h
     return detection_boxes;
 }
 
-std::vector<Object> Detector::detect(cv::Mat mat, float thresh, bool use_mean)
+std::vector<Object> Detector::Detect(const cv::Mat& mat, float thresh, bool use_mean)
 {
-    if(mat.data == NULL)
+    if(mat.data == nullptr)
         throw std::runtime_error("Image is empty");
     auto image_ptr = mat_to_image_resize(mat);
-    std::vector<bbox_t> bboxes = detect_resized(*image_ptr, mat.cols, mat.rows, thresh, use_mean);
+    std::vector<bbox_t> bboxes = DetectResized(*image_ptr, mat.cols, mat.rows, thresh, use_mean);
     std::vector<Object> results;
     for(const bbox_t& item : bboxes){
         Object obj;
-        obj.rect.x = item.x;
-        obj.rect.y = item.y;
-        obj.rect.width = item.w;
-        obj.rect.height = item.h;
-        obj.prob = item.prob;
-        obj.object_id = item.obj_id;
+        obj.mBbox[0] = item.x;
+        obj.mBbox[1] = item.y;
+        obj.mBbox[2] = item.w;
+        obj.mBbox[3] = item.h;
+        obj.mProb = item.prob;
+        obj.mObjectId = item.obj_id;
+        obj.mObjectName = mvObjectNames[item.obj_id];
         results.push_back(obj);
     }
+//    ShowConsoleResult(results);
     return results;
 }
 
-std::shared_ptr<image_t> Detector::mat_to_image_resize(cv::Mat mat) const
+std::shared_ptr<image_t> Detector::mat_to_image_resize(const cv::Mat& mat) const
 {
-    if (mat.data == NULL) return std::shared_ptr<image_t>(NULL);
+    if (mat.data == nullptr) return std::shared_ptr<image_t>(nullptr);
 
     cv::Size network_size = cv::Size(get_net_width(), get_net_height());
     cv::Mat det_mat;
@@ -52,7 +52,7 @@ std::shared_ptr<image_t> Detector::mat_to_image_resize(cv::Mat mat) const
     return mat_to_image(det_mat);
 }
 
-std::shared_ptr<image_t> Detector::mat_to_image(cv::Mat img_src)
+std::shared_ptr<image_t> Detector::mat_to_image(const cv::Mat& img_src)
 {
     cv::Mat img;
     if (img_src.channels() == 4) cv::cvtColor(img_src, img, cv::COLOR_RGBA2BGR);
@@ -73,46 +73,47 @@ cv::Scalar Detector::obj_id_to_color(int obj_id) {
     return color;
 }
 
-void Detector::draw_boxes(cv::Mat mat_img, const std::vector<Object>& result_vec, const std::vector<std::string>& obj_names)
+void Detector::DrawBoxes(cv::Mat mat_img, const std::vector<Object>& result_vec, const std::vector<std::string>& obj_names)
 {
     for (auto &i : result_vec) {
-        if (i.prob> 0.5) {
-            cv::Scalar color = obj_id_to_color(i.object_id);
-            cv::rectangle(mat_img, i.rect, color, 1);
-            std::string obj_name = obj_names[i.object_id];
-            cv::Size const text_size = getTextSize(obj_name, cv::FONT_HERSHEY_PLAIN, 1.2, 2, 0);
-            int max_width = (text_size.width > i.rect.width + 2) ? text_size.width : (i.rect.width + 2);
-            max_width = std::max(max_width, (int)i.rect.width + 2);
+        if (i.mProb> 0.5) {
+            cv::Scalar color = obj_id_to_color(i.mObjectId);
+            cv::Rect2f rect(i.mBbox[0], i.mBbox[1], i.mBbox[2], i.mBbox[3]);
+            cv::rectangle(mat_img, rect, color, 1);
+            std::string obj_name = obj_names[i.mObjectId];
+            cv::Size const text_size = getTextSize(obj_name, cv::FONT_HERSHEY_PLAIN, 1.2, 2, nullptr);
+            int max_width = (text_size.width > rect.width + 2) ? text_size.width : (rect.width + 2);
+            max_width = std::max(max_width, (int)rect.width + 2);
             //max_width = std::max(max_width, 283);
 
 //            cv::rectangle(mat_img, cv::Point2f(std::max((int)i.rect.x - 1, 0), std::max((int)i.rect.y - 35, 0)),
 //                          cv::Point2f(std::min((int)i.rect.x + max_width, mat_img.cols - 1), std::min((int)i.rect.y, mat_img.rows - 1)),
 //                          color, 1, 8, 0);
-            cv::putText(mat_img, obj_name, cv::Point2f(i.rect.x, i.rect.y - 6), cv::FONT_HERSHEY_PLAIN, 1.2, color, 2);
+            cv::putText(mat_img, obj_name, cv::Point2f(rect.x, rect.y - 6), cv::FONT_HERSHEY_PLAIN, 1.2, color, 2);
         }
     }
 }
 
-void Detector::show_console_result(const std::vector<Object>& result_vec, const std::vector<std::string>& obj_names, int frame_id) {
-    if (frame_id >= 0) std::cout << " Frame: " << frame_id << std::endl;
+void Detector::ShowConsoleResult(const std::vector<Object>& result_vec) {
     for (auto &i : result_vec) {
-        if (obj_names.size() > i.object_id) std::cout << obj_names[i.object_id] << " - ";
-        std::cout << "obj_id = " << i.object_id << ",  x = " << i.rect.x << ", y = " << i.rect.y
-                  << ", w = " << i.rect.width << ", h = " << i.rect.height
-                  << std::setprecision(3) << ", prob = " << i.prob << std::endl;
+        LOG(INFO) << mvObjectNames[i.mObjectId] << " - ";
+        LOG(INFO) << "Obj_id = " << i.mObjectId << ",  x = " << i.mBbox[0] << ", y = " << i.mBbox[1]
+                  << ", w = " << i.mBbox[2] << ", h = " << i.mBbox[3]
+                  << std::setprecision(3) << ", prob = " << i.mProb << std::endl;
     }
 }
 
- std::vector<std::string> Detector::objects_names_from_file(const std::string& filename) {
+void Detector::SetObjectNamesFromFile(const std::string& filename) {
+    mvObjectNames.clear();
     std::ifstream file(filename);
-    std::vector<std::string> file_lines;
-    if (!file.is_open()) return file_lines;
-    for(std::string line; getline(file, line);) file_lines.push_back(line);
+    if (!file.is_open())
+        return;
+    for(std::string line; getline(file, line);) 
+        mvObjectNames.push_back(line);
     std::cout << "object names loaded \n";
-     return file_lines;
 }
 
-image_t Detector::mat_to_image_custom(cv::Mat mat)
+image_t Detector::mat_to_image_custom(const cv::Mat& mat)
 {
     int w = mat.cols;
     int h = mat.rows;
@@ -133,7 +134,7 @@ image_t Detector::mat_to_image_custom(cv::Mat mat)
 image_t Detector::make_empty_image(int w, int h, int c)
 {
     image_t out;
-    out.data = 0;
+    out.data = nullptr;
     out.h = h;
     out.w = w;
     out.c = c;
