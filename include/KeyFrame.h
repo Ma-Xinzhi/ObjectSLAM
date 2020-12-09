@@ -2,6 +2,7 @@
 #define OBJECTSLAM_KEYFRAME_H
 
 #include "Frame.h"
+#include "Object.h"
 #include "ORBextractor.h"
 
 #include <mutex>
@@ -23,6 +24,8 @@ public:
     Eigen::Matrix3d GetRotation();
     Eigen::Vector3d GetCameraCenter();
     Eigen::Vector3d GetTranslation();
+
+    void SetDetectionResults(const Objects& obs) {mvObservations = obs;}
 
     // Covisibility graph functions
     void AddConnection(const std::shared_ptr<KeyFrame>& pKF, const int &weight);
@@ -132,6 +135,9 @@ private:
     Eigen::Matrix4d mTwc;
     Eigen::Matrix3d mRwc;
     Eigen::Vector3d mtwc;
+
+    // 目标检测概率大于阈值的结果
+    Objects mvObservations; // object detection result
 
     // 相互引用，MapPoint里面引用了KeyFrame
     std::vector<std::weak_ptr<MapPoint>> mvpMapPoints;

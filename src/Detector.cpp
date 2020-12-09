@@ -16,7 +16,7 @@ std::vector<bbox_t> Detector::DetectResized(image_t img, int init_w, int init_h,
     return detection_boxes;
 }
 
-std::vector<Object> Detector::Detect(const cv::Mat& mat, float thresh, bool use_mean)
+Objects Detector::Detect(const cv::Mat& mat, const std::shared_ptr<KeyFrame>& pKF, float thresh, bool use_mean)
 {
     if(mat.data == nullptr)
         throw std::runtime_error("Image is empty");
@@ -31,7 +31,7 @@ std::vector<Object> Detector::Detect(const cv::Mat& mat, float thresh, bool use_
         obj.mBbox[3] = item.h;
         obj.mProb = item.prob;
         obj.mObjectId = item.obj_id;
-        obj.mObjectName = mvObjectNames[item.obj_id];
+        obj.mpKeyFrame = pKF;
         results.push_back(obj);
     }
 //    ShowConsoleResult(results);
@@ -40,7 +40,8 @@ std::vector<Object> Detector::Detect(const cv::Mat& mat, float thresh, bool use_
 
 std::shared_ptr<image_t> Detector::mat_to_image_resize(const cv::Mat& mat) const
 {
-    if (mat.data == nullptr) return std::shared_ptr<image_t>(nullptr);
+    if (mat.data == nullptr)
+        return std::shared_ptr<image_t>(nullptr);
 
     cv::Size network_size = cv::Size(get_net_width(), get_net_height());
     cv::Mat det_mat;
@@ -73,44 +74,44 @@ cv::Scalar Detector::obj_id_to_color(int obj_id) {
     return color;
 }
 
-void Detector::DrawBoxes(cv::Mat mat_img, const std::vector<Object>& result_vec, const std::vector<std::string>& obj_names)
+void Detector::DrawBoxes(cv::Mat mat_img, const Objects& result_vec, const std::vector<std::string>& obj_names)
 {
     for (auto &i : result_vec) {
-        if (i.mProb> 0.5) {
-            cv::Scalar color = obj_id_to_color(i.mObjectId);
-            cv::Rect2f rect(i.mBbox[0], i.mBbox[1], i.mBbox[2], i.mBbox[3]);
-            cv::rectangle(mat_img, rect, color, 1);
-            std::string obj_name = obj_names[i.mObjectId];
-            cv::Size const text_size = getTextSize(obj_name, cv::FONT_HERSHEY_PLAIN, 1.2, 2, nullptr);
-            int max_width = (text_size.width > rect.width + 2) ? text_size.width : (rect.width + 2);
-            max_width = std::max(max_width, (int)rect.width + 2);
-            //max_width = std::max(max_width, 283);
+        cv::Scalar color = obj_id_to_color(i.mObjectId);
+        cv::Rect2f rect(i.mBbox[0], i.mBbox[1], i.mBbox[2], i.mBbox[3]);
+        cv::rectangle(mat_img, rect, color, 1);
+        std::string obj_name = obj_names[i.mObjectId];
+        cv::Size const text_size = getTextSize(obj_name, cv::FONT_HERSHEY_PLAIN, 1.2, 2, nullptr);
+        int max_width = (text_size.width > rect.width + 2) ? text_size.width : (rect.width + 2);
+        max_width = std::max(max_width, (int)rect.width + 2);
+        //max_width = std::max(max_width, 283);
 
 //            cv::rectangle(mat_img, cv::Point2f(std::max((int)i.rect.x - 1, 0), std::max((int)i.rect.y - 35, 0)),
 //                          cv::Point2f(std::min((int)i.rect.x + max_width, mat_img.cols - 1), std::min((int)i.rect.y, mat_img.rows - 1)),
 //                          color, 1, 8, 0);
-            cv::putText(mat_img, obj_name, cv::Point2f(rect.x, rect.y - 6), cv::FONT_HERSHEY_PLAIN, 1.2, color, 2);
-        }
+        cv::putText(mat_img, obj_name, cv::Point2f(rect.x, rect.y - 6), cv::FONT_HERSHEY_PLAIN, 1.2, color, 2);
     }
 }
 
-void Detector::ShowConsoleResult(const std::vector<Object>& result_vec) {
+void Detector::ShowConsoleResult(const Objects& result_vec, const std::vector<std::string>& obj_names) {
     for (auto &i : result_vec) {
-        LOG(INFO) << mvObjectNames[i.mObjectId] << " - ";
-        LOG(INFO) << "Obj_id = " << i.mObjectId << ",  x = " << i.mBbox[0] << ", y = " << i.mBbox[1]
+        LOG(INFO) << obj_names[i.mObjectId] << " - "
+                  << "Obj_id = " << i.mObjectId << ",  x = " << i.mBbox[0] << ", y = " << i.mBbox[1]
                   << ", w = " << i.mBbox[2] << ", h = " << i.mBbox[3]
                   << std::setprecision(3) << ", prob = " << i.mProb << std::endl;
     }
 }
 
-void Detector::SetObjectNamesFromFile(const std::string& filename) {
-    mvObjectNames.clear();
+std::vector<std::string> Detector::GetObjectNamesFromFile(const std::string& filename) {
     std::ifstream file(filename);
+    std::vector<std::string> file_lines;
     if (!file.is_open())
-        return;
-    for(std::string line; getline(file, line);) 
-        mvObjectNames.push_back(line);
-    std::cout << "object names loaded \n";
+        return file_lines;
+
+    for(std::string line; getline(file, line);)
+        file_lines.push_back(line);
+    LOG(INFO) << "Object names loaded \n";
+    return file_lines;
 }
 
 image_t Detector::mat_to_image_custom(const cv::Mat& mat)

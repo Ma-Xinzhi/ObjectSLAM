@@ -4,8 +4,8 @@
 #ifndef DETECTOR_H
 #define DETECTOR_H
 
+#include "Object.h"
 #include "KeyFrame.h"
-#include "Quadric.h"
 
 #include <algorithm>
 #include <chrono>
@@ -22,19 +22,6 @@
 #include <opencv2/imgproc/imgproc.hpp>
 
 #define LIB_API
-
-// 检测结果类====
-typedef struct Object
-{
-    Eigen::Vector4d mBbox;  // 边框
-    float mProb;             // 置信度
-    std::string mObjectName;// 物体类别名
-    int mObjectId;           // 类别id
-    std::weak_ptr<KeyFrame> mpKeyFrame;
-    std::weak_ptr<g2o::Quadric> mpQuadric;
-} Object;
-
-typedef std::vector<std::shared_ptr<Object>> Objects;
 
 struct bbox_t {
     unsigned int x, y, w, h;       // (x,y) - top-left corner, (w, h) - width & height of bounded box
@@ -62,7 +49,9 @@ struct image_t {
 
 class Detector {
 private:
-    std::vector<std::string> mvObjectNames;
+    std::shared_ptr<void> detector_gpu_ptr;
+    std::deque<std::vector<bbox_t>> prev_bbox_vec_deque;
+    std::string _cfg_filename, _weight_filename;
 
 public:
     LIB_API Detector(std::string cfg_filename, std::string weight_filename, int gpu_id = 0);
@@ -76,21 +65,23 @@ public:
     LIB_API int get_net_height() const;
 //    LIB_API int get_net_color_depth() const;
 
-    std::vector<bbox_t> DetectResized(image_t img, int init_w, int init_h, float thresh = 0.2, bool use_mean = false);
-
-    std::vector<Object> Detect(const cv::Mat& mat, float thresh = 0.2, bool use_mean = false);
-
-    void DrawBoxes(cv::Mat mat_img, const std::vector<Object>& result_vec, const std::vector<std::string>& obj_names);
-    void ShowConsoleResult(const std::vector<Object>& result_vec);
-
-    void SetObjectNamesFromFile(const std::string& filename);
-
-private:
     cv::Scalar obj_id_to_color(int obj_id);
 
     std::shared_ptr<image_t> mat_to_image_resize(const cv::Mat& mat) const;
 
     static std::shared_ptr<image_t> mat_to_image(const cv::Mat& img_src);
+
+    std::vector<bbox_t> DetectResized(image_t img, int init_w, int init_h, float thresh = 0.2, bool use_mean = false);
+
+    Objects Detect(const cv::Mat& mat, const std::shared_ptr<KeyFrame>& pKF, float thresh = 0.2, bool use_mean = false);
+
+    void DrawBoxes(cv::Mat mat_img, const Objects& result_vec, const std::vector<std::string>& obj_names);
+
+    void ShowConsoleResult(const Objects& result_vec, const std::vector<std::string>& obj_names);
+
+    std::vector<std::string> GetObjectNamesFromFile(const std::string& filename);
+
+private:
 
     static image_t mat_to_image_custom(const cv::Mat& mat);
 

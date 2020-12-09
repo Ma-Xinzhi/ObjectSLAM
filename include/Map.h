@@ -8,9 +8,9 @@
 
 #include "Frame.h"
 #include "KeyFrame.h"
-#include "Quadric.h"
-#include "Observation.h"
 #include "MapPoint.h"
+#include "Quadric.h"
+#include "Object.h"
 
 class Map{
 public:
@@ -30,9 +30,9 @@ public:
     void SetReferenceMapPoints(const std::vector<std::shared_ptr<MapPoint>>& vpMPs);
     std::vector<std::shared_ptr<MapPoint>> GetReferenceMapPoints();
 
-    void AddObservation(const std::shared_ptr<Observation>& pOb);
-    bool EraseObservation(int label);
-    std::map<int, Observations> GetAllObservation() const { return mmObjectObservation; };
+    void AddObject2D(const Object& pOb);
+    bool EraseObject2D(int label);
+    std::map<int, Objects> GetAllObject2Ds() const { return mmObjectObservations; };
 
     void clear();
 
@@ -60,7 +60,7 @@ private:
     std::vector<std::shared_ptr<g2o::Quadric>> mvpQuadric;
     std::vector<std::shared_ptr<KeyFrame>> mvpKeyFrame;
 
-    std::map<int, Observations> mmObjectObservation; //地图中当前所有可能构成物体的观测，将语义类别作为关键字
+    std::map<int, Objects> mmObjectObservations; //地图中当前所有可能构成物体的观测，将语义类别作为关键字
 
     long unsigned int mnMaxKFId;
 };

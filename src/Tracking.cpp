@@ -6,8 +6,8 @@
 #include <set>
 #include <opencv2/core/eigen.hpp>
 
-Tracking::Tracking(const std::string &strSettingPath, std::shared_ptr<Map> pMap, std::shared_ptr<MapDrawer> pMapDrawer,
-             std::shared_ptr<FrameDrawer> pFrameDrawer): mState(NO_IMAGES_YET), mpMap(pMap), mpMapDrawer(pMapDrawer),
+Tracking::Tracking(const std::string &strSettingPath, const std::shared_ptr<Map>& pMap, const std::shared_ptr<MapDrawer>& pMapDrawer,
+             const std::shared_ptr<FrameDrawer>& pFrameDrawer): mState(NO_IMAGES_YET), mpMap(pMap), mpMapDrawer(pMapDrawer),
              mpFrameDrawer(pFrameDrawer), mnLastRelocFrameId(0), mpCurrentFrame(nullptr), mpLastFrame(nullptr),
              mpLastKeyFrame(nullptr), mpReferenceKF(nullptr), mbVelocity(false){
     cv::FileStorage fSettings(strSettingPath, cv::FileStorage::READ);
@@ -76,12 +76,17 @@ Tracking::Tracking(const std::string &strSettingPath, std::shared_ptr<Map> pMap,
     else
         mDepthMapFactor = 1.0f/mDepthMapFactor;
 
+    std::string cfg_file = fSettings["Yolo.cfg"];
+    std::string weights_file = fSettings["Yolo.weights"];
+    mfThresh = fSettings["Yolo.threshold"];
+    mDetector = std::make_unique<Detector>(cfg_file, weights_file);
+
     fSettings.release();
 }
 
 // 先根据每一帧数据进行跟踪，给定关键帧条件，设置关键帧
 // 对关键帧进行目标检测，检查是否能够初始化物体实例
-void Tracking::GrabPoseAndSingleObject(const g2o::SE3Quat &pose, std::shared_ptr<Observation> bbox, const cv::Mat &img_RGB) {
+void Tracking::GrabPoseAndSingleObject(const g2o::SE3Quat &pose, const Object& bbox, const cv::Mat &img_RGB) {
     mCurImg = img_RGB;
     // 这里不能用mpCurrentFrame私有变量来作为Frame对象的shared_ptr
     // 因为只有一个类Tracking，该私有变量指针所指代的对象会发生更换，造成weak_ptr表示的shared_ptr为空
@@ -100,7 +105,7 @@ void Tracking::GrabPoseAndSingleObject(const g2o::SE3Quat &pose, std::shared_ptr
 //    }
 }
 
-void Tracking::GrabPoseAndObjects(const g2o::SE3Quat &pose, const Observations &bbox, const cv::Mat &img_RGB) {
+void Tracking::GrabPoseAndObjects(const g2o::SE3Quat &pose, const Objects &bbox, const cv::Mat &img_RGB) {
 
 }
 
@@ -178,9 +183,6 @@ void Tracking::Track() {
         if(bOK)
             bOK = TrackLocalMap();
 
-        // Update drawer
-        mpFrameDrawer->Update(this);
-
         // If tracking were good, check if we insert a keyframe
         if(bOK){
             mState = OK;
@@ -224,6 +226,9 @@ void Tracking::Track() {
         else
             mState = LOST;
 
+        // Update drawer
+        mpFrameDrawer->Update(this);
+
         mpLastFrame = mpCurrentFrame;
     }
 
@@ -237,9 +242,9 @@ void Tracking::Track() {
 
 // 剔除当前帧中不好的检测结果
 void Tracking::UpdateObjectObservation() {
-    Observations obs = mpCurrentFrame->GetDetectionResults();
+    Objects obs = mpCurrentFrame->GetDetectionResults();
     for(auto iter=obs.begin(); iter!=obs.end(); ){
-        Eigen::Vector4d measurement = (*iter)->mBbox;
+        Eigen::Vector4d measurement = (*iter).mBbox;
         //TODO 两个参数设置，检测框的大小和距离图像边界距离
         int config_border = 10;
         int config_size = 10;
@@ -247,7 +252,7 @@ void Tracking::UpdateObjectObservation() {
             obs.erase(iter);
         }else{
 //            (*iter)->mpKeyFrame = mpCurrentFrame;
-            mpMap->AddObservation(*iter);
+            mpMap->AddObject2D(*iter);
             iter++;
         }
     }
@@ -264,10 +269,10 @@ void Tracking::CheckInitialization() {
     for(const auto& object : objects){
         exist_objects.insert(object->GetLabel());
     }
-    std::map<int, Observations> observations = mpMap->GetAllObservation();
+    std::map<int, Objects> observations = mpMap->GetAllObject2Ds();
     for(auto iter = observations.begin(); iter != observations.end(); iter++){
         if(exist_objects.find(iter->first) == exist_objects.end()){
-            Observations obs = iter->second;
+            Objects obs = iter->second;
             int frame_num = obs.size();
             if(frame_num < config_minimum_initialization_frame)
                 continue;
@@ -279,8 +284,6 @@ void Tracking::CheckInitialization() {
 
             if(mpInitailizeQuadric->GetResult()){
                 Q_ptr->SetObservation(obs);
-                for(auto& ob : obs)
-                    ob->mpQuadric = Q_ptr;
                 mpMap->AddQuadric(Q_ptr);
                 LOG(INFO) << std::endl
                           << "-------- INITIALIZE NEW OBJECT BY SVD ---------" << std::endl
@@ -299,6 +302,10 @@ void Tracking::StereoInitialization() {
         mpCurrentFrame->SetPose(Eigen::Matrix4d::Identity());
 
         std::shared_ptr<KeyFrame> pKFinit = std::make_shared<KeyFrame>(mpCurrentFrame, mpMap);
+
+        Objects obs = mDetector->Detect(mCurImg, pKFinit, mfThresh);
+
+        pKFinit->SetDetectionResults(obs);
 
         mpMap->AddKeyFrame(pKFinit);
 
@@ -322,6 +329,7 @@ void Tracking::StereoInitialization() {
         mpLocalMapping->InsertKeyFrame(pKFinit);
 
         mpCurrentFrame->mpReferenceKF = pKFinit;
+        mpCurrentFrame->SetDetectionResults(obs);
 
         mpLastFrame = mpCurrentFrame;
         mpLastKeyFrame = pKFinit;
@@ -668,8 +676,12 @@ void Tracking::CreateNewKeyFrame()
 
     std::shared_ptr<KeyFrame> pKF = std::make_shared<KeyFrame>(mpCurrentFrame, mpMap);
 
+    Objects obs = mDetector->Detect(mCurImg, pKF, mfThresh);
+    pKF->SetDetectionResults(obs);
+
     mpReferenceKF = pKF;
     mpCurrentFrame->mpReferenceKF = pKF;
+    mpCurrentFrame->SetDetectionResults(obs);
 
     mpLocalMapping->InsertKeyFrame(pKF);
 

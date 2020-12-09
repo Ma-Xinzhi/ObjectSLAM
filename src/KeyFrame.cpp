@@ -1,4 +1,5 @@
 #include "KeyFrame.h"
+#include "Object.h"
 #include "MapPoint.h"
 #include "Map.h"
 #include "ORBmatcher.h"

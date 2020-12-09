@@ -23,6 +23,8 @@ private:
     void DrawObservationOnImage(cv::Mat& img);
     void DrawProjectionOnImage(cv::Mat& img);
 
+    cv::Scalar ObjectIdToColor(int obj_id);
+
     // image会在Track线程中更新，也会在Viewer线程中显示，属于共享的数据需要加锁
     std::mutex mMutex;
 
@@ -38,7 +40,7 @@ private:
     std::vector<int> mvIniMatches;
     int mState;
 
-    Observations mvpObservation;
+    Objects mvObservations;
     cv::Mat mK;
 };
 

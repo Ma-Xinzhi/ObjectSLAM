@@ -1,5 +1,4 @@
 #include "Frame.h"
-#include "Observation.h"
 #include "MapPoint.h"
 #include "KeyFrame.h"
 
@@ -63,17 +62,17 @@ Frame::Frame(const cv::Mat &imGray, const cv::Mat &depth, double timeStamp, std:
     AssignFeaturesToGrid();
 }
 
-Frame::Frame(const g2o::SE3Quat& pose, const std::vector<std::shared_ptr<Observation>>& bbox, const cv::Mat& Image):
-    mvpObservation(bbox), mFrameImg(Image){
+Frame::Frame(const g2o::SE3Quat& pose, const Objects& bbox, const cv::Mat& Image):
+    mvObservations(bbox), mFrameImg(Image){
     mTwc = pose.to_homogeneous_matrix();
     mnId = nNextId++;
 }
 
-Frame::Frame(const g2o::SE3Quat& pose, std::shared_ptr<Observation> bbox, const cv::Mat& Image):mFrameImg(Image){
+Frame::Frame(const g2o::SE3Quat& pose, Object bbox, const cv::Mat& Image):mFrameImg(Image){
     static int id = 0;
     mnId = id++;
     mTwc = pose.to_homogeneous_matrix();
-    mvpObservation.push_back(bbox);
+    mvObservations.push_back(bbox);
 }
 
 void Frame::ExtractORB(const cv::Mat &img) {

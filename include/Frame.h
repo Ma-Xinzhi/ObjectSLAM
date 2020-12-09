@@ -2,6 +2,7 @@
 #define OBJECTSLAM_FRAME_H
 
 #include "ORBextractor.h"
+#include "Object.h"
 #include "Thirdparty/g2o/g2o/types/se3quat.h"
 
 #include <opencv2/core.hpp>
@@ -12,7 +13,6 @@
 #define FRAME_GRID_ROWS 48
 #define FRAME_GRID_COLS 64
 
-struct Observation;
 class MapPoint;
 class KeyFrame;
 
@@ -21,8 +21,8 @@ public:
     Frame()=default;
     Frame(const cv::Mat& imGray, const cv::Mat& depth, double timeStamp, std::shared_ptr<ORBextractor> extractor,
           const cv::Mat& K, const cv::Mat& distCoef, float bf, float thDepth);
-    Frame(const g2o::SE3Quat& pose, std::shared_ptr<Observation> bbox, const cv::Mat& image);
-    Frame(const g2o::SE3Quat& pose, const std::vector<std::shared_ptr<Observation>>& bbox, const cv::Mat& image);
+    Frame(const g2o::SE3Quat& pose, Object bbox, const cv::Mat& image);
+    Frame(const g2o::SE3Quat& pose, const Objects& bbox, const cv::Mat& image);
 
     void ExtractORB(const cv::Mat &img);
     std::vector<size_t> GetFeaturesInArea(float x, float y, float r, int minLevel=-1, int maxLevel=-1) const;
@@ -31,8 +31,8 @@ public:
 
     Eigen::Vector3d UnprojectStereo(int i);
 
-    void SetDetectionResults(const std::vector<std::shared_ptr<Observation>>& detection_results) { mvpObservation = detection_results; }
-    std::vector<std::shared_ptr<Observation>> GetDetectionResults() const{ return mvpObservation; }
+    void SetDetectionResults(const Objects& detection_results) { mvObservations = detection_results; }
+    Objects GetDetectionResults() const{ return mvObservations; }
 
 //    void SetPose(const g2o::SE3Quat& pose_wc) { mTwc_se3 = pose_wc; }
     void SetPose(const Eigen::Matrix4d& pose_wc);
@@ -52,6 +52,8 @@ public:
     std::shared_ptr<KeyFrame> mpReferenceKF;
 
     cv::Mat mFrameImg;
+
+    Objects mvObservations; // object detection result
 
     double mTimeStamp;
 
@@ -114,9 +116,6 @@ private:
     void ComputeImageBounds(const cv::Mat& img);
 
     bool PosInGrid(const cv::KeyPoint &kp, int &posX, int &posY);
-
-    std::vector<std::shared_ptr<Observation>> mvpObservation; // object detection result
-    g2o::SE3Quat mTwc_se3;  // optimized pose  cam to world
 
     Eigen::Matrix4d mTwc;
     Eigen::Matrix3d mRwc;

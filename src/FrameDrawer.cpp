@@ -56,9 +56,11 @@ cv::Mat FrameDrawer::DrawFrame() {
         }
     }
 
+    DrawObservationOnImage(img);
+
     cv::Mat imText;
     DrawTextInfoOnImage(img, state, imText);
-//    DrawObservationOnImage(img);
+
     return imText;
 }
 
@@ -141,12 +143,10 @@ void FrameDrawer::DrawTextInfoOnImage(cv::Mat &img, int state, cv::Mat& imText) 
 }
 
 void FrameDrawer::DrawObservationOnImage(cv::Mat& img) {
-    for(const auto& ob : mvpObservation){
-        Eigen::Vector4d bbox = ob->mBbox;
-        int label = ob->mLabel;
-        cv::Rect rect(cv::Point(bbox[0], bbox[1]), cv::Point(bbox[2], bbox[3]));
-        cv::rectangle(img, rect, cv::Scalar(0,0,255),2);
-        cv::putText(img, std::to_string(label), cv::Point(bbox[0], bbox[1]), CV_FONT_HERSHEY_PLAIN, 1.5, cv::Scalar(0,255,0), 2);
+    for (auto &ob : mvObservations) {
+        cv::Scalar color = ObjectIdToColor(ob.mObjectId);
+        cv::Rect2f rect(ob.mBbox[0], ob.mBbox[1], ob.mBbox[2], ob.mBbox[3]);
+        cv::rectangle(img, rect, color, 1);
     }
 }
 
@@ -180,7 +180,7 @@ void FrameDrawer::Update(Tracking* pTracker) {
     mK = pTracker->GetK();
 
     mpCurrentFrame = pTracker->mpCurrentFrame;
-    mvpObservation = mpCurrentFrame->GetDetectionResults();
+    mvObservations = mpCurrentFrame->GetDetectionResults();
     mvCurrentKeys = mpCurrentFrame->mvKeys;
     N = mvCurrentKeys.size();
     mvbMap = std::vector<bool>(N, false);
@@ -201,4 +201,13 @@ void FrameDrawer::Update(Tracking* pTracker) {
     }
 
     mState = pTracker->mLastProcessedState;
+}
+
+cv::Scalar FrameDrawer::ObjectIdToColor(int obj_id) {
+    int const colors[6][3] = { { 1,0,1 },{ 0,0,1 },{ 0,1,1 },{ 0,1,0 },{ 1,1,0 },{ 1,0,0 } };
+    int const offset = obj_id * 123457 % 6;
+    int const color_scale = 150 + (obj_id * 123457) % 100;
+    cv::Scalar color(colors[offset][0], colors[offset][1], colors[offset][2]);
+    color *= color_scale;
+    return color;
 }

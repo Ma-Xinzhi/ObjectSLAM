@@ -4,21 +4,21 @@ InitializeQuadric::InitializeQuadric(int height, int width): mImageHeight(height
     mbResult = false;
 }
 
-std::shared_ptr<g2o::Quadric> InitializeQuadric::BuildQuadric(const Observations &obs, const Eigen::Matrix3d &calib) {
+std::shared_ptr<g2o::Quadric> InitializeQuadric::BuildQuadric(const Objects &obs, const Eigen::Matrix3d &calib) {
     std::vector<g2o::SE3Quat> poses;
     std::vector<Eigen::VectorXd> detections;
     for(const auto& ob : obs){
-        Eigen::Matrix4d Twc = ob->mpKeyFrame.lock()->GetPose();
+        Eigen::Matrix4d Twc = ob.mpKeyFrame->GetPose();
         g2o::SE3Quat pose(Twc.block(0,0,3,3), Twc.col(3).head(3));
         Eigen::VectorXd detection;
         detection.resize(6);
-        detection << ob->mBbox, ob->mLabel, ob->mProb;
+        detection << ob.mBbox, ob.mObjectId, ob.mProb;
         poses.push_back(pose);
         detections.push_back(detection);
     }
     std::shared_ptr<g2o::Quadric> Q_ptr = BuildQuadric(poses, detections, calib);
     if (mbResult)
-        Q_ptr->SetLabel(obs[0]->mLabel);
+        Q_ptr->SetLabel(obs[0].mObjectId);
     return Q_ptr;
 }
 

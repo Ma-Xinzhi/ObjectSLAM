@@ -1,6 +1,8 @@
 #ifndef OBJECTSLAM_DATASET_H
 #define OBJECTSLAM_DATASET_H
 
+#include "Object.h"
+
 #include <iostream>
 #include <string>
 #include <opencv2/opencv.hpp>
@@ -8,7 +10,6 @@
 #include <glog/logging.h>
 
 #include "Thirdparty/g2o/g2o/types/types_six_dof_expmap.h"
-#include "Observation.h"
 
 class Dataset{
 public:
@@ -19,7 +20,7 @@ public:
     void ReadFrame(cv::Mat &rgb, g2o::SE3Quat& pose);
 
     bool LoadDetection();
-    Observations GetDetection();
+    Objects GetDetection();
 
 
 private:

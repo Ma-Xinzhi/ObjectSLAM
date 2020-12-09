@@ -3,7 +3,7 @@
 
 #include "Map.h"
 #include "Frame.h"
-#include "Observation.h"
+#include "Detector.h"
 #include "InitializeQuadric.h"
 #include "FrameDrawer.h"
 #include "MapDrawer.h"
@@ -14,14 +14,14 @@
 
 class Tracking{
 public:
-    Tracking(const std::string& strSettingPath, std::shared_ptr<Map> pMap, std::shared_ptr<MapDrawer> pMapDrawer,
-          std::shared_ptr<FrameDrawer> pFrameDrawer);
+    Tracking(const std::string& strSettingPath, const std::shared_ptr<Map>& pMap, const std::shared_ptr<MapDrawer>& pMapDrawer,
+          const std::shared_ptr<FrameDrawer>& pFrameDrawer);
 
-    void GrabPoseAndSingleObject(const g2o::SE3Quat& pose, std::shared_ptr<Observation> bbox, const cv::Mat& img_RGB);
-    void GrabPoseAndObjects(const g2o::SE3Quat& pose, const Observations& bbox, const cv::Mat& img_RGB);
+    void GrabPoseAndSingleObject(const g2o::SE3Quat& pose, const Object& bbox, const cv::Mat& img_RGB);
+    void GrabPoseAndObjects(const g2o::SE3Quat& pose, const Objects& bbox, const cv::Mat& img_RGB);
     void GrabRGBDImage(const cv::Mat& img_RGB, const cv::Mat& depth, double timestamp);
 
-    void SetLocalMapper(std::shared_ptr<LocalMapping> pLocalMapper) {mpLocalMapping = pLocalMapper;}
+    void SetLocalMapper(const std::shared_ptr<LocalMapping>& pLocalMapper) {mpLocalMapping = pLocalMapper;}
 
     cv::Mat GetK() const { return mK; }
 
@@ -90,6 +90,9 @@ private:
     std::shared_ptr<ORBextractor> mpORBextractor;
 
     std::shared_ptr<LocalMapping> mpLocalMapping;
+
+    std::unique_ptr<Detector> mDetector;
+    float mfThresh;
 
     // Motion Model
     Eigen::Matrix4d mVelocity; // T_last_current

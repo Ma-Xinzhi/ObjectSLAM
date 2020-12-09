@@ -1,6 +1,7 @@
 #ifndef OBJECTSLAM_QUADRIC_H
 #define OBJECTSLAM_QUADRIC_H
 
+#include "Object.h"
 #include "Thirdparty/g2o/g2o/types/types_six_dof_expmap.h"
 #include "utils/matrix_utils.h"
 
@@ -13,8 +14,6 @@
 typedef Eigen::Matrix<double, 5, 1> Vector5d;
 typedef Eigen::Matrix<double, 9, 1> Vector9d;
 typedef Eigen::Matrix<double, 10, 1> Vector10d;
-
-struct Observation;
 
 namespace g2o {
 
@@ -50,8 +49,8 @@ namespace g2o {
         void SetScale(const Vector3d& scale_) { mScale = scale_; }
         void SetLabel(const int& label) { mLabel = label; }
 
-        void SetObservation(const std::vector<std::shared_ptr<Observation>>& obs) { mvpObservation = obs; }
-        void AddObservation(const std::shared_ptr<Observation>& ob) { mvpObservation.push_back(ob); }
+        void SetObservation(const Objects& obs) { mvObservations = obs; }
+        void AddObservation(const Object& ob) { mvObservations.push_back(ob); }
 
         // apply update to current quadric, exponential map
         Quadric exp_update(const Vector9d& update);
@@ -97,7 +96,7 @@ namespace g2o {
         SE3Quat mPose; // 从自身坐标系到世界坐标系 Twq
         Eigen::Vector3d mScale;  // semi-axis a,b,c
 
-        std::vector<std::shared_ptr<Observation>> mvpObservation;
+        Objects mvObservations;
 
     };
 

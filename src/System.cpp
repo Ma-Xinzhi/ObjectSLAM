@@ -35,11 +35,11 @@ void System::TrackWithSingleObject(const Eigen::VectorXd &pose, const Eigen::Vec
     Eigen::Vector4d q_vec = pose.tail(4);
     Eigen::Quaterniond q(q_vec);
     g2o::SE3Quat pose_se3(q, t);
-    std::shared_ptr<Observation> ob_ptr(new Observation);
-    ob_ptr->mBbox = detection.head(4);
-    ob_ptr->mLabel = detection[4];
-    ob_ptr->mProb = detection[5];
-    mpTracker->GrabPoseAndSingleObject(pose_se3, ob_ptr, im);
+    Object ob;
+    ob.mBbox = detection.head(4);
+    ob.mObjectId = detection[4];
+    ob.mProb = detection[5];
+    mpTracker->GrabPoseAndSingleObject(pose_se3, ob, im);
 }
 
 void System::TrackWithObjects(const Eigen::VectorXd &pose, const std::vector<Eigen::VectorXd> &detections,
@@ -48,14 +48,14 @@ void System::TrackWithObjects(const Eigen::VectorXd &pose, const std::vector<Eig
     Eigen::Vector4d q_vec = pose.tail(4);
     Eigen::Quaterniond q(q_vec);
     g2o::SE3Quat pose_se3(q, t);
-    Observations obs;
+    Objects obs;
     for(int i=0; i<detections.size(); i++){
         Eigen::VectorXd det_vec = detections[i];
-        std::shared_ptr<Observation> ob_ptr(new Observation);
-        ob_ptr->mBbox = det_vec.head(4);
-        ob_ptr->mLabel = det_vec[4];
-        ob_ptr->mProb = det_vec[5];
-        obs.push_back(ob_ptr);
+        Object ob;
+        ob.mBbox = det_vec.head(4);
+        ob.mObjectId = det_vec[4];
+        ob.mProb = det_vec[5];
+        obs.push_back(ob);
     }
     // TODO 检测框很多的情况
     mpTracker->GrabPoseAndObjects(pose_se3, obs, im);
