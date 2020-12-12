@@ -149,8 +149,8 @@ std::vector<std::vector<string>> readStringFromFile(const char* fileName, int dr
 // return false if the measure lies on the image border or does not meet the size requirement
 bool calibrateMeasurement(Vector4d &measure , int rows, int cols, int config_boarder, int config_size){
 
-    int x_length = measure[2] - measure[0];
-    int y_length = measure[3] - measure[1];
+    int x_length = measure[2];
+    int y_length = measure[3];
     if( x_length < config_size || y_length < config_size ){
         std::cout << " [small detection " << config_size << "] invalid. " << std::endl;
         return false;

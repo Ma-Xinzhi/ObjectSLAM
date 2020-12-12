@@ -26,7 +26,7 @@ namespace g2o {
 
         // 拷贝函数不需要对id做增加
         Quadric(const Quadric& Q);
-        const Quadric& operator=(const Quadric& Q);
+        Quadric& operator=(const Quadric& Q);
 
         // v = (t1,t2,t3,theta1,theta2,theta3,s1,s2,s3)
         // xyz roll pitch yaw half_scale
@@ -35,32 +35,27 @@ namespace g2o {
         // xyz quaternion,
         void fromVector(const Vector10d& v);
 
-        g2o::SE3Quat GetPose() const { return mPose; }
-        Matrix3d GetRotation() const { return mPose.rotation().toRotationMatrix(); }
-        Vector3d GetTranslation() const { return mPose.translation(); }
+        g2o::SE3Quat GetPose() const { return mTwq; }
+        Matrix3d GetRotation() const { return mTwq.rotation().toRotationMatrix(); }
+        Vector3d GetTranslation() const { return mTwq.translation(); }
         Vector3d GetScale() const { return mScale; }
-        int GetLabel() const { return mLabel; }
-        int GetInstanceID() const { return mInstanceID; }
 
 
-        void SetTranslation(const Vector3d& t_) { mPose.setTranslation(t_); }
-        void SetRotation(const Quaterniond& r_) { mPose.setRotation(r_); }
-        void SetRotation(const Matrix3d& R) { mPose.setRotation(Quaterniond(R)); }
+        void SetTranslation(const Vector3d& t_) { mTwq.setTranslation(t_); }
+        void SetRotation(const Quaterniond& r_) { mTwq.setRotation(r_); }
+        void SetRotation(const Matrix3d& R) { mTwq.setRotation(Quaterniond(R)); }
         void SetScale(const Vector3d& scale_) { mScale = scale_; }
-        void SetLabel(const int& label) { mLabel = label; }
 
-        void SetObservation(const Objects& obs) { mvObservations = obs; }
-        void AddObservation(const Object& ob) { mvObservations.push_back(ob); }
+        void AddObservation(const std::shared_ptr<KeyFrame>& pKF, int idx);
+        void EraseObservation(const std::shared_ptr<KeyFrame>& pKF);
 
         // apply update to current quadric, exponential map
         Quadric exp_update(const Vector9d& update);
 
-        // transform a local cuboid to global cuboid  Twc is camera pose. from camera
-        // to world
+        // transform a local quadric to global quadric  Twc is camera pose. from camera to world
         Quadric transform_from(const SE3Quat& Twc) const;
 
-        // transform a global cuboid to local cuboid  Twc is camera pose. from camera
-        // to world
+        // transform a global quadric to local quadric  Twc is camera pose. from camera to world
         Quadric transform_to(const SE3Quat& Twc) const;
 
         // xyz roll pitch yaw half_scale
@@ -86,17 +81,22 @@ namespace g2o {
         Vector5d ProjectOntoImageEllipse(const SE3Quat& campose_wc, const Matrix3d& calib) const;
         Vector4d GetBboxFromEllipse(const Vector5d& ellipse) const;
 
-
         bool CheckObservability(const SE3Quat& cam_pose);
-    private:
-        int mLabel; //Quadric表示的物体类别
-        int mInstanceID; //Quadric的自身ID
 
+    public:
+        static long unsigned int nNextId;
+        long unsigned int mnId; //Quadric的自身ID
+        int mObjectId; //Quadric表示的物体类别
+
+
+    private:
 //        double mdPro;
-        SE3Quat mPose; // 从自身坐标系到世界坐标系 Twq
+        int mnObs;
+
+        SE3Quat mTwq; // 从自身坐标系到世界坐标系 Twq
         Eigen::Vector3d mScale;  // semi-axis a,b,c
 
-        Objects mvObservations;
+        std::map<std::shared_ptr<KeyFrame>, int> mObservations;
 
     };
 

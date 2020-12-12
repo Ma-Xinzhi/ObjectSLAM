@@ -18,7 +18,7 @@ std::shared_ptr<g2o::Quadric> InitializeQuadric::BuildQuadric(const Objects &obs
     }
     std::shared_ptr<g2o::Quadric> Q_ptr = BuildQuadric(poses, detections, calib);
     if (mbResult)
-        Q_ptr->SetLabel(obs[0].mObjectId);
+        Q_ptr->mObjectId = obs[0].mObjectId;
     return Q_ptr;
 }
 

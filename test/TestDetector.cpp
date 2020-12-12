@@ -7,7 +7,7 @@ int main(int argc, char *argv[])
 //    std::string  cfg_file = "../cfg/yolov3.cfg";
     std::string  weights_file = "../model/yolov4.weights";
 //    std::string  weights_file = "../model/yolov3.weights";
-    std::string filename = "../test/image/dishes.png";
+    std::string filename = "../test/image/desk.png";
 
     Detector detector(cfg_file, weights_file);
 
@@ -20,7 +20,7 @@ int main(int argc, char *argv[])
 //        auto det_image = detector.mat_to_image_resize(mat_img);
 
     auto start = std::chrono::steady_clock::now();
-    std::vector<Object> result_vec = detector.Detect(mat_img);
+    std::vector<Object> result_vec = detector.Detect(mat_img, nullptr, 0.75);
     auto end = std::chrono::steady_clock::now();
     std::chrono::duration<double> spent = end - start;
     std::cout << " Time: " << spent.count() << " secs \n";

@@ -81,6 +81,9 @@ Tracking::Tracking(const std::string &strSettingPath, const std::shared_ptr<Map>
     mfThresh = fSettings["Yolo.threshold"];
     mDetector = std::make_unique<Detector>(cfg_file, weights_file);
 
+    mnSize = fSettings["Yolo.size"];
+    mnBorder = fSettings["Yolo.border"];
+
     fSettings.release();
 }
 
@@ -209,8 +212,10 @@ void Tracking::Track() {
 //                }
 //            }
 
-            if(NeedNewKeyFrame())
+            if(NeedNewKeyFrame()){
                 CreateNewKeyFrame();
+                QuadricInitialization();                
+            }
 
             // We allow points with high innovation (considererd outliers by the Huber Function)
             // pass to the new keyframe, so that bundle adjustment will finally decide
@@ -241,25 +246,19 @@ void Tracking::Track() {
 }
 
 // 剔除当前帧中不好的检测结果
-void Tracking::UpdateObjectObservation() {
-    Objects obs = mpCurrentFrame->GetDetectionResults();
+void Tracking::ObjectObservationCulling(Objects& obs) {
     for(auto iter=obs.begin(); iter!=obs.end(); ){
         Eigen::Vector4d measurement = (*iter).mBbox;
-        //TODO 两个参数设置，检测框的大小和距离图像边界距离
-        int config_border = 10;
-        int config_size = 10;
-        if(!calibrateMeasurement(measurement, mImgHeight, mImgWidth, config_border, config_size)){
+        if(!calibrateMeasurement(measurement, mImgHeight, mImgWidth, mnBorder, mnSize)){
             obs.erase(iter);
         }else{
-//            (*iter)->mpKeyFrame = mpCurrentFrame;
-            mpMap->AddObject2D(*iter);
+            mpMap->AddObjectObservation(*iter);
             iter++;
         }
     }
-    mpCurrentFrame->SetDetectionResults(obs);
 }
 
-void Tracking::CheckInitialization() {
+void Tracking::QuadricInitialization() {
     // TODO 参数设置，需要几帧数据进行初始化
     int config_minimum_initialization_frame = 3;
     // TODO 先按照每一个语义类别只有一种物体来计算，认为相同语义类别就是一个物体
@@ -267,28 +266,27 @@ void Tracking::CheckInitialization() {
     std::vector<std::shared_ptr<g2o::Quadric>> objects = mpMap->GetAllQuadric();
     std::set<int> exist_objects;
     for(const auto& object : objects){
-        exist_objects.insert(object->GetLabel());
+        exist_objects.insert(object->mnId);
     }
-    std::map<int, Objects> observations = mpMap->GetAllObject2Ds();
+    std::map<int, Objects> observations = mpMap->GetAllObjectObservations();
     for(auto iter = observations.begin(); iter != observations.end(); iter++){
         if(exist_objects.find(iter->first) == exist_objects.end()){
             Objects obs = iter->second;
             int frame_num = obs.size();
             if(frame_num < config_minimum_initialization_frame)
                 continue;
-            LOG(INFO) << "Frame number: " << frame_num << std::endl;
 
             Eigen::Matrix3d calib;
             cv::cv2eigen(mK, calib);
             std::shared_ptr<g2o::Quadric> Q_ptr = mpInitailizeQuadric->BuildQuadric(obs, calib);
 
             if(mpInitailizeQuadric->GetResult()){
-                Q_ptr->SetObservation(obs);
+//                Q_ptr->SetObservation(obs);
                 mpMap->AddQuadric(Q_ptr);
                 LOG(INFO) << std::endl
                           << "-------- INITIALIZE NEW OBJECT BY SVD ---------" << std::endl
-                          << "Label ID: " << Q_ptr->GetLabel() << std::endl
-                          << "Instance ID: " << Q_ptr->GetInstanceID() << std::endl
+                          << "Object ID: " << Q_ptr->mObjectId << std::endl
+                          << "Quadric ID: " << Q_ptr->mnId << std::endl
                           << "Pose: " << Q_ptr->toVector().transpose() << std::endl
                           << "Scale: " << Q_ptr->GetScale().transpose() << std::endl
                           << std::endl;
@@ -304,6 +302,7 @@ void Tracking::StereoInitialization() {
         std::shared_ptr<KeyFrame> pKFinit = std::make_shared<KeyFrame>(mpCurrentFrame, mpMap);
 
         Objects obs = mDetector->Detect(mCurImg, pKFinit, mfThresh);
+        ObjectObservationCulling(obs);
 
         pKFinit->SetDetectionResults(obs);
 
@@ -329,7 +328,7 @@ void Tracking::StereoInitialization() {
         mpLocalMapping->InsertKeyFrame(pKFinit);
 
         mpCurrentFrame->mpReferenceKF = pKFinit;
-        mpCurrentFrame->SetDetectionResults(obs);
+        mpCurrentFrame->SetDetectionResults(obs); // This is for visualization
 
         mpLastFrame = mpCurrentFrame;
         mpLastKeyFrame = pKFinit;
@@ -677,6 +676,8 @@ void Tracking::CreateNewKeyFrame()
     std::shared_ptr<KeyFrame> pKF = std::make_shared<KeyFrame>(mpCurrentFrame, mpMap);
 
     Objects obs = mDetector->Detect(mCurImg, pKF, mfThresh);
+    ObjectObservationCulling(obs);
+
     pKF->SetDetectionResults(obs);
 
     mpReferenceKF = pKF;

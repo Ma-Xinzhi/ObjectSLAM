@@ -16,15 +16,15 @@ void Map::AddMapPoint(const std::shared_ptr<MapPoint>& pMp) {
     mspMapPoints.insert(pMp);
 }
 
-void Map::AddObject2D(const Object &pOb){
-    //　TODO 先按一个物体最简单的方式来处理，考虑数据关联的问题
-    int label = pOb.mObjectId;
-    if(mmObjectObservations.find(label) != mmObjectObservations.end()){
-        mmObjectObservations[label].push_back(pOb);
+void Map::AddObjectObservation(const Object &Ob){
+    //　TODO 假设每类物体只有一个，按简单的方式来处理，需要考虑一类物体多个的数据关联问题
+    int label = Ob.mObjectId;
+    if(mObjectObservations.find(label) != mObjectObservations.end()){
+        mObjectObservations[label].push_back(Ob);
     } else{
         Objects obs;
-        obs.push_back(pOb);
-        mmObjectObservations.insert(std::make_pair(label, obs));
+        obs.push_back(Ob);
+        mObjectObservations.insert(std::make_pair(label, obs));
     }
 }
 
@@ -43,12 +43,12 @@ void Map::EraseMapPoint(const std::shared_ptr<MapPoint>& pMp) {
     mspMapPoints.erase(pMp);
 }
 
-bool Map::EraseObject2D(int label) {
-    if(mmObjectObservations.find(label) == mmObjectObservations.end()){
+bool Map::EraseObjectObservation(int label) {
+    if(mObjectObservations.find(label) == mObjectObservations.end()){
         LOG(WARNING) << "No Observation of Label " << label;
         return false;
     }else{
-        mmObjectObservations.erase(label);
+        mObjectObservations.erase(label);
         return true;
     }
 }

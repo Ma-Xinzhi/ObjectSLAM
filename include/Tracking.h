@@ -26,8 +26,8 @@ public:
     cv::Mat GetK() const { return mK; }
 
 private:
-    void UpdateObjectObservation();
-    void CheckInitialization();
+    void ObjectObservationCulling(Objects& obs);
+    void QuadricInitialization();
 //    void ProcessVisualization();
 
     /*-------------------------------------------------------------*/
@@ -93,6 +93,8 @@ private:
 
     std::unique_ptr<Detector> mDetector;
     float mfThresh;
+
+    int mnSize, mnBorder;
 
     // Motion Model
     Eigen::Matrix4d mVelocity; // T_last_current

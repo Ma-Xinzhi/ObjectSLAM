@@ -1,54 +1,71 @@
 #include "Quadric.h"
+#include "Map.h"
 
 namespace g2o{
 
+    long unsigned int Quadric::nNextId = 0;
+
     Quadric::Quadric() {
-        mPose = SE3Quat();
+        mTwq = SE3Quat();
         mScale.setZero();
-        mLabel = -1;
-        mInstanceID = -1;
+        mObjectId = -1;
+        mnId = -1;
     }
 
     Quadric::Quadric(const Matrix3d& R, const Vector3d& t, const Vector3d& inputscale)
-        :mScale(inputscale){
-        static int TotalID = 0;
-        mPose = SE3Quat(R, t);
-        mInstanceID = TotalID++;
-        mLabel = -1;
+        :mScale(inputscale), mnObs(0){
+        mTwq = SE3Quat(R, t);
+        mnId = nNextId++;
+        mObjectId = -1;
     }
 
     Quadric::Quadric(const g2o::Quadric &Q) {
-        mLabel = Q.mLabel;
-        mInstanceID = Q.mInstanceID;
-        mPose = Q.mPose;
+        mObjectId = Q.mObjectId;
+        mnId = Q.mnId;
+        mTwq = Q.mTwq;
         mScale = Q.mScale;
     }
 
-    const Quadric& Quadric::operator=(const g2o::Quadric &Q) {
-        mLabel = Q.mLabel;
-        mInstanceID = Q.mInstanceID;
-        mPose = Q.mPose;
+    Quadric& Quadric::operator=(const g2o::Quadric &Q) {
+        mObjectId = Q.mObjectId;
+        mnId = Q.mnId;
+        mTwq = Q.mTwq;
         mScale = Q.mScale;
-        return Q;
+        return *this;
+    }
+
+    void Quadric::AddObservation(const std::shared_ptr<KeyFrame> &pKF, int idx) {
+        if(mObservations.count(pKF))
+            return;
+        mObservations[pKF] = idx;
+
+        mnObs++;
+    }
+
+    void Quadric::EraseObservation(const std::shared_ptr<KeyFrame> &pKF) {
+        if(mObservations.count(pKF)){
+            mnObs--;
+            mObservations.erase(pKF);
+        }
     }
 
     // v = (t1,t2,t3,theta1,theta2,theta3,s1,s2,s3)
     // xyz roll pitch yaw half_scale
     void Quadric::fromMinimalVector(const Vector9d& v) {
         Eigen::Quaterniond posequat = zyx_euler_to_quat(v(3), v(4), v(5));
-        mPose = SE3Quat(posequat, v.head<3>());
+        mTwq = SE3Quat(posequat, v.head<3>());
         mScale = v.tail<3>();
     }
     // xyz quaternion half_scale
     void Quadric::fromVector(const Vector10d& v) {
-        mPose.fromVector(v.head(7));
+        mTwq.fromVector(v.head(7));
         mScale = v.tail(3);
     }
 
     // apply update to current quadric, exponential map
     Quadric Quadric::exp_update(const Vector9d& update) {
         Quadric res(*this);
-        res.mPose = res.mPose * SE3Quat::exp(update.head<6>());
+        res.mTwq = res.mTwq * SE3Quat::exp(update.head<6>());
         res.mScale = res.mScale + update.tail<3>();
         return res;
     }
@@ -57,7 +74,7 @@ namespace g2o{
     // to world
     Quadric Quadric::transform_from(const SE3Quat& Twc) const {
         Quadric res;
-        res.mPose = Twc * this->mPose;
+        res.mTwq = Twc * this->mTwq;
         res.mScale = this->mScale;
         return res;
     }
@@ -66,7 +83,7 @@ namespace g2o{
     // to world
     Quadric Quadric::transform_to(const SE3Quat& Twc) const {
         Quadric res;
-        res.mPose = Twc.inverse() * this->mPose;
+        res.mTwq = Twc.inverse() * this->mTwq;
         res.mScale = this->mScale;
         return res;
     }
@@ -75,8 +92,8 @@ namespace g2o{
     Vector9d Quadric::toRPYVector() const{
         Vector9d v;
         double yaw, pitch, roll;
-        quat_to_euler_zyx(mPose.rotation(), roll, pitch, yaw);
-        v.head<3>() = mPose.translation();
+        quat_to_euler_zyx(mTwq.rotation(), roll, pitch, yaw);
+        v.head<3>() = mTwq.translation();
         v[3] = roll;
         v[4] = pitch;
         v[5] = yaw;
@@ -87,7 +104,7 @@ namespace g2o{
     // xyz quaternion, half_scale
     Vector10d Quadric::toVector() const{
         Vector10d v;
-        v.head<7>() = mPose.toVector();
+        v.head<7>() = mTwq.toVector();
         v.tail<3>() = mScale;
         return v;
     }
@@ -101,7 +118,7 @@ namespace g2o{
         centreAtOrigin(2, 2) = pow(mScale(2), 2);
         centreAtOrigin(3, 3) = -1;
         Matrix4d Z;
-        Z = mPose.to_homogeneous_matrix();
+        Z = mTwq.to_homogeneous_matrix();
         SymMat = Z * centreAtOrigin * Z.transpose();
         return SymMat;
     }
@@ -229,7 +246,7 @@ namespace g2o{
 
     bool Quadric::CheckObservability(const g2o::SE3Quat &cam_pose) {
         // 蠢！！！求取的是相机坐标系下的向量，不是世界坐标系下的向量
-        Vector3d quadric_center = mPose.translation();
+        Vector3d quadric_center = mTwq.translation();
         Vector3d camera_center = cam_pose.translation();
 
         Vector3d quadric_in_camera = cam_pose.inverse() * (quadric_center - camera_center);
@@ -238,7 +255,7 @@ namespace g2o{
         else
             return true;
         // 也可以这样求解，这样求解比较直观吧，直接在位姿T阶段进行求解
-//        g2o::SE3Quat rpose = cam_pose.inverse() * mPose;
+//        g2o::SE3Quat rpose = cam_pose.inverse() * mTwq;
 //        if(rpose.translation()[2] < 0)
 //            return false;
 //        else
