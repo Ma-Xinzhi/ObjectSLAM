@@ -7,6 +7,7 @@
 #include "InitializeQuadric.h"
 #include "FrameDrawer.h"
 #include "MapDrawer.h"
+#include "Detector.h"
 
 class Track{
 public:
@@ -33,6 +34,9 @@ private:
     std::shared_ptr<MapDrawer> mpMapDrawer;
     std::shared_ptr<Map> mpMap;
     std::shared_ptr<Frame> mpCurrentFrame;
+
+    std::unique_ptr<Detector> mpDetector;
+
     cv::Mat mCurImg;
 
     int mImgWidth, mImgHeight;
