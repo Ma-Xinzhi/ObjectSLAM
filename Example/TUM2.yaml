@@ -37,8 +37,8 @@ DepthMapFactor: 5208.0
 #--------------------------------------------------------------------------------------------
 # Yolo Parameters
 #--------------------------------------------------------------------------------------------
-Yolo.cfg: ../cfg/yolov4.cfg
-Yolo.weights: ../model/yolov4.weights
+Yolo.cfg: ../cfg/yolov3.cfg
+Yolo.weights: ../model/yolov3.weights
 Yolo.threshold: 0.5
 
 Yolo.size: 10

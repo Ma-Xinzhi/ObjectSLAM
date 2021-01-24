@@ -260,7 +260,7 @@ void Tracking::ObjectObservationCulling(Objects& obs) {
 
 void Tracking::QuadricInitialization() {
     // TODO 参数设置，需要几帧数据进行初始化
-    int config_minimum_initialization_frame = 3;
+    int config_minimum_initialization_frame = 8;
     // TODO 先按照每一个语义类别只有一种物体来计算，认为相同语义类别就是一个物体
     // 这部分数据关联的问题后续再想办法,先实现简单版本
     std::vector<std::shared_ptr<g2o::Quadric>> objects = mpMap->GetAllQuadric();

@@ -10,9 +10,16 @@ void LoadImages(const std::string& strAssociationFilename, std::vector<std::stri
                 std::vector<std::string>& vstrImageFilenamesD, std::vector<double>& vTimestamps);
 
 int main(int argc, char** argv){
-    std::string strAssociationFilename = "/home/maxinzhi/Dataset/TUM/rgbd_dataset_freiburg2_dishes/associate.txt";
+    std::string strAssociationFilename = "/home/maxinzhi/Dataset/TUM/rgbd_dataset_freiburg2_metallic_sphere2/rgbd.txt";
+//    std::string strAssociationFilename = "/home/maxinzhi/Dataset/TUM/rgbd_dataset_freiburg2_coke/rgbd.txt";
+//    std::string strAssociationFilename = "/home/maxinzhi/Dataset/TUM/rgbd_dataset_freiburg2_coke/rgbd.txt";
+//    std::string strAssociationFilename = "/home/maxinzhi/Dataset/TUM/rgbd_dataset_freiburg2_dishes/associate.txt";
     std::string strConfigFile = "../Example/TUM2.yaml";
-    std::string strDataset = "/home/maxinzhi/Dataset/TUM/rgbd_dataset_freiburg2_dishes/";
+//    std::string strConfigFile = "../Example/TUM2.yaml";
+    std::string strDataset = "/home/maxinzhi/Dataset/TUM/rgbd_dataset_freiburg2_metallic_sphere2/";
+//    std::string strDataset = "/home/maxinzhi/Dataset/TUM/rgbd_dataset_freiburg2_coke/";
+//    std::string strDataset = "/home/maxinzhi/Dataset/TUM/rgbd_dataset_freiburg2_coke/";
+//    std::string strDataset = "/home/maxinzhi/Dataset/TUM/rgbd_dataset_freiburg2_dishes/";
 
     std::vector<std::string> vstrImageFilenamesRGB, vstrImageFilenamesD;
     std::vector<double> vTimestamps;
@@ -33,7 +40,7 @@ int main(int argc, char** argv){
     std::vector<float> vTimesTrack;
     vTimesTrack.resize(nImages);
 
-    LOG(INFO) << "-------------" << std::endl
+    LOG(INFO) << std::endl <<  "-------------" << std::endl
               << "Start processing sequence ..." << std::endl
               << "Images in the sequence: " << nImages << std::endl << std::endl;
 
@@ -91,13 +98,15 @@ void LoadImages(const std::string& strAssociationFilename, std::vector<std::stri
         if(!s.empty()){
             std::stringstream ss;
             ss << s;
-            double t;
+            std::string time;
             std::string sRGB, sD;
-            ss >> t;
-            vTimestamps.push_back(t);
+            ss >> time;
+            if(strcmp(time.c_str(), "#")==0)
+                continue;
+            vTimestamps.push_back(std::stod(time));
             ss >> sRGB;
             vstrImageFilenamesRGB.push_back(sRGB);
-            ss >> t;
+//            ss >> t;
             ss >> sD;
             vstrImageFilenamesD.push_back(sD);
         }

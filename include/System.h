@@ -23,10 +23,10 @@ public:
     ~System();
 
     void TrackWithSingleObject(const Eigen::VectorXd& pose, const Eigen::VectorXd& detection,
-                               const cv::Mat& im = cv::Mat());
+                               const cv::Mat& rgb_img);
 
     void TrackWithObjects(const Eigen::VectorXd& pose, const std::vector<Eigen::VectorXd>& detections,
-                          const cv::Mat& im = cv::Mat());
+                          const cv::Mat& rgb_img);
 
     void TrackRGBD(const cv::Mat& img, const cv::Mat& depthmap, const double& timestamp);
 
